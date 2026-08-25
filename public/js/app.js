@@ -147,12 +147,27 @@ function renderResult(id, data) {
   const tests = visibleItems.filter(isTest);
   const works = visibleItems.filter(item => !isTest(item));
   const escapeHTML = (value) => String(value ?? '').replace(/[&<>"']/g, char => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[char]);
+  // Existing synced data can contain a short "หลัง 10 ข้อ" header because
+  // Google Sheets exports merged cells only once.  Test columns are ordered
+  // before/after within each unit, so use the preceding unit label to make the
+  // result unambiguous without waiting for another sync.
+  let currentUnitName = '';
+  const testsWithUnitNames = tests.map(item => {
+    const name = item.name || '';
+    const unitMatch = name.match(/(?:แบบทดสอบ\s*)?หน่วย\s*(?:ที่\s*)?(\d+)/i);
+    if (unitMatch) currentUnitName = `แบบทดสอบหน่วย ${unitMatch[1]}`;
+    const isShortPreOrPost = /^(ก่อน|หลัง)\s*\d+\s*(?:ข้อ|คะแนน)?/i.test(name);
+    return isShortPreOrPost && currentUnitName
+      ? { ...item, displayName: `${currentUnitName} — ${name}` }
+      : item;
+  });
   const renderItems = (items) => items.map(item => {
+    const name = item.displayName || item.name;
     const missing = item.score === null || item.score === undefined || item.status === 'missing';
     const score = missing ? '—' : round1(item.score);
     const max = item.max === null || item.max === undefined ? '' : ` / ${round1(item.max)}`;
     return `<div class="item-row glass ${missing ? 'item-row--missing' : ''}">
-      <span class="t" title="${escapeHTML(item.name)}">${escapeHTML(item.name)}</span>
+      <span class="t" title="${escapeHTML(name)}">${escapeHTML(name)}</span>
       <div class="r">
         <span class="sc ${missing ? 'missing' : ''}">${score}${max}</span>
         <span class="pill ${missing ? 'status-missing' : 'status-ok'}">${missing ? 'ยังไม่มีคะแนน' : 'มีคะแนนแล้ว'}</span>
@@ -160,7 +175,7 @@ function renderResult(id, data) {
     </div>`;
   }).join('');
 
-  unitGrid.innerHTML = tests.length ? renderItems(tests) : '<p class="empty-items">ไม่มีข้อมูลแบบทดสอบรายข้อ</p>';
+  unitGrid.innerHTML = testsWithUnitNames.length ? renderItems(testsWithUnitNames) : '<p class="empty-items">ไม่มีข้อมูลแบบทดสอบรายข้อ</p>';
   itemGrid.innerHTML = works.length ? renderItems(works) : '<p class="empty-items">ไม่มีข้อมูลงานในชั้นเรียน</p>';
 
   // Hide assignment sections if no data
