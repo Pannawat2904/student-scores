@@ -26,6 +26,33 @@ const supabase = createClient(supabaseUrl, supabaseKey);
 app.use(cors());
 app.use(express.json());
 
+// Debug endpoint — remove after fix
+app.get('/api/debug', async (req, res) => {
+  const info = {
+    nodeVersion: process.version,
+    hasFetch: typeof fetch !== 'undefined',
+    supabaseUrl: supabaseUrl,
+    supabaseKeyLen: supabaseKey.length,
+    env_SUPABASE_URL: process.env.SUPABASE_URL || '(not set)',
+    env_SUPABASE_KEY_len: (process.env.SUPABASE_KEY || '').length
+  };
+  try {
+    const testRes = await fetch(`${supabaseUrl}/rest/v1/scores?select=id&limit=1`, {
+      headers: {
+        'apikey': supabaseKey,
+        'Authorization': `Bearer ${supabaseKey}`
+      }
+    });
+    info.supabaseStatus = testRes.status;
+    info.supabaseOk = testRes.ok;
+    const text = await testRes.text();
+    info.supabaseResponse = text.substring(0, 200);
+  } catch(e) {
+    info.supabaseError = e.message;
+  }
+  res.json(info);
+});
+
 // Cookie Parsing Helper
 function parseCookies(request) {
   const list = {};
