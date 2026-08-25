@@ -280,10 +280,14 @@ function processCSVContent(content, subject) {
   }
 
   const summaryColumns = new Set([workCol, midCol, jitCol, finalCol, totalCol]);
+  // These are summary/administrative fields, not work that a student needs to
+  // submit.  Some exports repeat a label in a different header row, so filter
+  // by name as well as by its detected summary column.
+  const isSummaryOrNote = (name) => /คะแนนเก็บ|คะแนนระหว่างเรียน|คะแนนรวม|รวมคะแนน|จิตพิสัย|ปลายภาค|เกรด|หมายเหตุ|^รวม(?:\s|$)/.test(name);
   const assignmentColumns = columnHeaders
     .map((name, index) => ({ name, index }))
     // Columns 0–4 contain row number and student details in the supported export.
-    .filter(({ name, index }) => index >= 5 && name && !summaryColumns.has(index))
+    .filter(({ name, index }) => index >= 5 && name && !summaryColumns.has(index) && !isSummaryOrNote(name))
     .filter(({ name }) => !/^(ลำดับ|รหัส|ชื่อ|นามสกุล|ห้อง|ชั้น|กลุ่ม|เลขที่)(\s|$)/.test(name));
 
   const parseAssignmentScore = (value) => {
@@ -298,7 +302,7 @@ function processCSVContent(content, subject) {
     return match ? Number.parseFloat(match[1]) : null;
   };
 
-  const isTest = (name) => /ทดสอบ|แบบสอบ|ข้อสอบ|สอบย่อย|quiz/i.test(name);
+  const isTest = (name) => /ทดสอบ|แบบสอบ|ข้อสอบ|สอบย่อย|quiz|(?:^|—\s*)(?:ก่อน|หลัง)\s*\d+\s*(?:ข้อ|คะแนน)?/i.test(name);
 
   const parsedStudents = [];
   for (let i = dataStartIndex; i < records.length; i++) {

@@ -139,8 +139,13 @@ function renderResult(id, data) {
   const unitGrid = document.getElementById("unit-grid");
   const itemGrid = document.getElementById("item-grid");
   const assignments = Array.isArray(data.assignments) ? data.assignments : [];
-  const tests = assignments.filter(a => a.type === 'test' || /ทดสอบ|แบบสอบ|ข้อสอบ|สอบย่อย|quiz/i.test(a.name));
-  const works = assignments.filter(a => !tests.includes(a));
+  const isSummaryOrNote = (name) => /คะแนนเก็บ|คะแนนระหว่างเรียน|คะแนนรวม|รวมคะแนน|จิตพิสัย|ปลายภาค|เกรด|หมายเหตุ|^รวม(?:\s|$)/.test(name || '');
+  const isTest = (item) => item.type === 'test' || /ทดสอบ|แบบสอบ|ข้อสอบ|สอบย่อย|quiz|(?:^|—\s*)(?:ก่อน|หลัง)\s*\d+\s*(?:ข้อ|คะแนน)?/i.test(item.name || '');
+  // Filter on the page too, so existing records immediately stop showing
+  // summary columns even before the next data sync replaces them.
+  const visibleItems = assignments.filter(item => !isSummaryOrNote(item.name));
+  const tests = visibleItems.filter(isTest);
+  const works = visibleItems.filter(item => !isTest(item));
   const escapeHTML = (value) => String(value ?? '').replace(/[&<>"']/g, char => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[char]);
   const renderItems = (items) => items.map(item => {
     const missing = item.score === null || item.score === undefined || item.status === 'missing';
