@@ -569,12 +569,11 @@ async function triggerSync() {
 const logoutBtn = document.getElementById("btn-logout");
 if (logoutBtn) {
   logoutBtn.addEventListener("click", () => {
-    fetch(window.location.href, {
-      headers: { 'Authorization': 'Basic ' + btoa('logout:logout') }
-    }).then(() => {
-      window.location.href = '/';
+    fetch('/api/logout', { method: 'POST' })
+    .then(() => {
+      window.location.href = '/login.html';
     }).catch(() => {
-      window.location.href = '/';
+      window.location.href = '/login.html';
     });
   });
 }

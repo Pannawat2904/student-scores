@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>เข้าสู่ระบบแอดมิน — ระบบติดตามผลการเรียน</title>
+<link rel="stylesheet" href="css/student.css?v=22">
+<style>
+  .login-card {
+    max-width: 400px;
+    margin: 60px auto;
+    padding: 40px 30px;
+  }
+  .login-error {
+    color: var(--rose);
+    background: var(--rose-dim);
+    padding: 10px;
+    border-radius: 8px;
+    font-size: 14px;
+    margin-bottom: 20px;
+    display: none;
+    text-align: center;
+  }
+</style>
+</head>
+<body>
+
+<a href="/" class="admin-login-btn">🏠 กลับหน้าหลัก</a>
+
+<div class="aurora" aria-hidden="true">
+  <div class="aurora__blob aurora__blob--a"></div>
+  <div class="aurora__blob aurora__blob--b"></div>
+  <div class="aurora__blob aurora__blob--c"></div>
+</div>
+
+<div class="wrap" style="padding-top: 10vh;">
+  <div class="search-hero">
+    <div class="icon" style="margin: 0 auto 15px auto;">🔒</div>
+    <h1 style="font-size: 28px;">เข้าสู่ระบบแอดมิน</h1>
+    <p>กรุณากรอก Username และ Password เพื่อเข้าสู่ระบบจัดการคะแนน</p>
+  </div>
+  
+  <section class="search-card glass login-card">
+    <div id="login-error" class="login-error">Username หรือ Password ไม่ถูกต้อง</div>
+    
+    <form class="search-form-stacked" id="login-form">
+      <div class="form-group">
+        <label class="field-label" for="username">Username</label>
+        <input class="field" id="username" type="text" placeholder="กรอก Username" required autocomplete="username">
+      </div>
+      <div class="form-group" style="margin-top: 15px;">
+        <label class="field-label" for="password">Password</label>
+        <input class="field" id="password" type="password" placeholder="กรอก Password" required autocomplete="current-password">
+      </div>
+      <button type="submit" class="btn btn--gold" id="login-btn" style="width: 100%; margin-top: 25px;">เข้าสู่ระบบ</button>
+    </form>
+  </section>
+</div>
+
+<script src="js/login.js?v=1"></script>
+</body>
+</html>

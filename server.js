@@ -16,24 +16,68 @@ const supabase = createClient(supabaseUrl, supabaseKey);
 app.use(cors());
 app.use(express.json());
 
-// Basic Auth Middleware
-const basicAuth = (req, res, next) => {
-  const b64auth = (req.headers.authorization || '').split(' ')[1] || '';
-  const [login, password] = Buffer.from(b64auth, 'base64').toString().split(':');
+// Cookie Parsing Helper
+function parseCookies(request) {
+  const list = {};
+  const cookieHeader = request.headers?.cookie;
+  if (!cookieHeader) return list;
 
-  const adminUser = process.env.ADMIN_USER || 'admin';
-  const adminPass = process.env.ADMIN_PASS || 'password';
+  cookieHeader.split(';').forEach(function(cookie) {
+      let [ name, ...rest] = cookie.split('=');
+      name = name?.trim();
+      if (!name) return;
+      const value = rest.join('=').trim();
+      if (!value) return;
+      list[name] = decodeURIComponent(value);
+  });
+  return list;
+}
 
-  if (login && password && login === adminUser && password === adminPass) {
+// Cookie Auth Middleware
+const cookieAuth = (req, res, next) => {
+  const cookies = parseCookies(req);
+  const token = cookies['admin_token'];
+  const expectedToken = Buffer.from(`${process.env.ADMIN_USER}:${process.env.ADMIN_PASS}`).toString('base64');
+  
+  if (token === expectedToken) {
     return next();
   }
 
-  res.set('WWW-Authenticate', 'Basic realm="401"');
-  res.status(401).send('Authentication required.');
+  // If asking for an HTML page, redirect to login
+  if (req.path === '/admin.html') {
+    return res.redirect('/login.html');
+  }
+  
+  // Otherwise it's an API request
+  res.status(401).json({ error: 'Authentication required' });
 };
 
+// API: Login
+app.post('/api/login', (req, res) => {
+  const { username, password } = req.body;
+  const adminUser = process.env.ADMIN_USER || 'admin';
+  const adminPass = process.env.ADMIN_PASS || 'password';
+
+  if (username === adminUser && password === adminPass) {
+    const token = Buffer.from(`${username}:${password}`).toString('base64');
+    // Set cookie, valid for 7 days
+    res.cookie('admin_token', token, { maxAge: 7 * 24 * 60 * 60 * 1000, httpOnly: true, secure: true, sameSite: 'strict' });
+    // Note: express res.cookie needs cookie-parser usually, but since Vercel env handles basic Express routing we can just use Set-Cookie header to be safe without importing anything
+    res.setHeader('Set-Cookie', `admin_token=${token}; Max-Age=${7 * 24 * 60 * 60}; HttpOnly; Secure; SameSite=Strict; Path=/`);
+    res.json({ success: true });
+  } else {
+    res.status(401).json({ error: 'Invalid credentials' });
+  }
+});
+
+// API: Logout
+app.post('/api/logout', (req, res) => {
+  res.setHeader('Set-Cookie', `admin_token=; Max-Age=0; HttpOnly; Secure; SameSite=Strict; Path=/`);
+  res.json({ success: true });
+});
+
 // Protect admin.html BEFORE static middleware
-app.get('/admin.html', basicAuth, (req, res) => {
+app.get('/admin.html', cookieAuth, (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'admin.html'));
 });
 
@@ -69,7 +113,7 @@ app.get('/api/scores/:id', async (req, res) => {
 });
 
 // POST /api/scores - Add or Update a single score manually
-app.post('/api/scores', basicAuth, async (req, res) => {
+app.post('/api/scores', cookieAuth, async (req, res) => {
   const studentData = {
     id: req.body.id,
     subject: req.body.subject || 'Default',
@@ -88,7 +132,7 @@ app.post('/api/scores', basicAuth, async (req, res) => {
 });
 
 // DELETE /api/scores/:id - Delete a score
-app.delete('/api/scores/:id', basicAuth, async (req, res) => {
+app.delete('/api/scores/:id', cookieAuth, async (req, res) => {
   // In a real app, you might also need the subject to delete a specific row
   // Here we just delete all records for this student id
   const { error } = await supabase.from('scores').delete().eq('id', req.params.id);
@@ -104,7 +148,7 @@ app.get('/api/config', async (req, res) => {
 });
 
 // POST /api/config - Save sync configurations (Expects array of configs)
-app.post('/api/config', basicAuth, async (req, res) => {
+app.post('/api/config', cookieAuth, async (req, res) => {
   const configs = req.body;
   if (!Array.isArray(configs)) return res.status(400).json({ error: 'Expected an array of configs' });
   
@@ -215,7 +259,7 @@ function processCSVContent(content, subject) {
 }
 
 // POST /api/scores/upload - Upload and parse CSV
-app.post('/api/scores/upload', basicAuth, upload.single('file'), async (req, res) => {
+app.post('/api/scores/upload', cookieAuth, upload.single('file'), async (req, res) => {
   if (!req.file) {
     return res.status(400).json({ error: 'No file uploaded' });
   }
@@ -236,7 +280,7 @@ app.post('/api/scores/upload', basicAuth, upload.single('file'), async (req, res
 });
 
 // POST /api/scores/sync - Trigger sync from all configured Google Sheets
-app.post('/api/scores/sync', basicAuth, async (req, res) => {
+app.post('/api/scores/sync', cookieAuth, async (req, res) => {
   const { data: configs, error: configError } = await supabase.from('configs').select('*');
   if (configError) return res.status(500).json({ error: configError.message });
   if (!configs || configs.length === 0) {
