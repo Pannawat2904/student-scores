@@ -45,6 +45,7 @@ document.getElementById("back-btn").addEventListener("click", (e) => {
   e.preventDefault();
   resultView.classList.remove("show");
   searchView.classList.remove("hide");
+  document.querySelector('.admin-login-btn').style.display = '';
   window.scrollTo({ top: 0, behavior: 'smooth' });
 });
 
@@ -215,6 +216,21 @@ function renderResult(id, data) {
       itemGrid.innerHTML = `<p style="color:var(--ink-dim); font-size:14px; padding:10px;">ไม่มีข้อมูลภาระงาน</p>`;
     }
   }
+
+  // Hide assignment sections if no data
+  const sectionQuiz = document.getElementById("section-quiz");
+  const sectionWork = document.getElementById("section-work");
+  if (!data.assignments || data.assignments.length === 0) {
+    if(sectionQuiz) sectionQuiz.style.display = 'none';
+    if(sectionWork) sectionWork.style.display = 'none';
+  } else {
+    if(sectionQuiz) sectionQuiz.style.display = '';
+    if(sectionWork) sectionWork.style.display = '';
+  }
+
+  // Hide admin button when viewing result
+  const adminBtn = document.querySelector('.admin-login-btn');
+  if(adminBtn) adminBtn.style.display = 'none';
 
   searchView.classList.add("hide");
   resultView.classList.add("show");
