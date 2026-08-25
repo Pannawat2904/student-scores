@@ -33,7 +33,9 @@ const basicAuth = (req, res, next) => {
 };
 
 // Protect admin.html BEFORE static middleware
-app.use('/admin.html', basicAuth);
+app.get('/admin.html', basicAuth, (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'admin.html'));
+});
 
 app.use(express.static('public'));
 
