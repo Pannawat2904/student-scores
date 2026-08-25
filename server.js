@@ -258,11 +258,22 @@ function processCSVContent(content, subject) {
   // labels so that a grouped heading (for example "งาน") retains the actual
   // assignment name from the row below it.
   const columnHeaders = [];
+  let currentTestUnit = '';
   for (let c = 0; c < (records[subHeaderIndex] || []).length; c++) {
     const labels = [];
     for (let r = 0; r <= subHeaderIndex; r++) {
       const label = (records[r][c] || '').trim();
-      if (label && !labels.includes(label)) labels.push(label);
+      if (label && !labels.includes(label)) {
+        labels.push(label);
+        // In Sheets exports, merged unit headings appear only in their first
+        // column. Remember that heading so the following "หลัง ... ข้อ"
+        // column keeps its unit number too.
+        if (/(?:แบบ)?ทดสอบ.*หน่วย|หน่วย\s*(?:ที่\s*)?\d+/i.test(label)) currentTestUnit = label;
+      }
+    }
+    const itemLabel = labels.join(' — ');
+    if (currentTestUnit && /^(ก่อน|หลัง)\s*\d+\s*(?:ข้อ|คะแนน)?/i.test(itemLabel) && !itemLabel.includes(currentTestUnit)) {
+      labels.unshift(currentTestUnit);
     }
     columnHeaders[c] = labels.join(' — ');
   }

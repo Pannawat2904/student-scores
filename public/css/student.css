@@ -124,8 +124,8 @@ html,body{ margin:0; padding:0; min-height:100%; background:var(--void); color:v
 
 /* ---------- item rows (assignments) ---------- */
 .item-grid{ display:grid; grid-template-columns:repeat(auto-fit, minmax(260px,1fr)); gap:12px; }
-.item-row{ padding:14px 16px; display:flex; align-items:center; justify-content:space-between; gap:12px; }
-.item-row .t{ font-size:13.5px; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.item-row{ padding:14px 16px; display:flex; align-items:flex-start; justify-content:space-between; gap:12px; }
+.item-row .t{ flex:1; font-size:13.5px; min-width:0; line-height:1.45; overflow-wrap:anywhere; }
 .item-row .r{ display:flex; align-items:center; gap:10px; flex-shrink:0; }
 .item-row .sc{ font-family:var(--f-mono); font-size:14px; font-weight:600; min-width:26px; text-align:right; }
 .item-row .sc.missing{ color:var(--ink-faint); }
