@@ -514,8 +514,11 @@ async function saveSyncSettings() {
   
   rows.forEach(r => {
     const subject = r.querySelector(".config-subject").value.trim();
-    const url = r.querySelector(".config-url").value.trim();
+    let url = r.querySelector(".config-url").value.trim();
     if (subject && url) {
+      if (url.includes('/edit')) {
+        url = url.replace(/\/edit.*$/, '/export?format=csv&gid=0');
+      }
       newConfigs.push({ subject, url });
     }
   });
