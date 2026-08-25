@@ -10,6 +10,9 @@
   "author": "",
   "license": "ISC",
   "type": "commonjs",
+  "engines": {
+    "node": ">=18.0.0"
+  },
   "dependencies": {
     "@supabase/supabase-js": "^2.112.4",
     "cors": "^2.8.6",
@@ -18,6 +21,7 @@
     "dotenv": "^17.4.2",
     "express": "^5.2.1",
     "jsdom": "^29.1.1",
-    "multer": "^2.2.0"
+    "multer": "^2.2.0",
+    "node-fetch": "^2.7.0"
   }
 }

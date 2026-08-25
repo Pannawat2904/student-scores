@@ -1,4 +1,12 @@
 require('dotenv').config();
+// Polyfill fetch for Node.js < 18 (Vercel may use older Node version)
+if (!globalThis.fetch) {
+  const nodeFetch = require('node-fetch');
+  globalThis.fetch = nodeFetch;
+  globalThis.Headers = nodeFetch.Headers;
+  globalThis.Request = nodeFetch.Request;
+  globalThis.Response = nodeFetch.Response;
+}
 const express = require('express');
 const cors = require('cors');
 const path = require('path');
