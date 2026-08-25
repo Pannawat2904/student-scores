@@ -488,9 +488,19 @@ function addConfigRow(subject = '', url = '') {
   div.style.borderRadius = "8px";
   
   div.innerHTML = `
-    <input type="text" class="field config-subject" placeholder="ชื่อวิชา (เช่น วิชาโปรแกรมฐานข้อมูล)" value="${subject}" style="margin-bottom: 8px;">
-    <input type="text" class="field config-url" placeholder="Google Sheets Export URL" value="${url}">
-    <button type="button" class="btn btn--ghost" style="color:var(--rose); margin-top:5px; padding: 4px 8px;" onclick="this.parentElement.remove()">- ลบวิชานี้</button>
+    <div style="display: flex; flex-direction: column; gap: 8px;">
+      <div>
+        <label class="field-label" style="font-size: 13px; color: var(--ink-dim);">📚 ชื่อวิชา</label>
+        <input type="text" class="field config-subject" placeholder="เช่น วิชาโปรแกรมฐานข้อมูล" value="${subject}">
+      </div>
+      <div>
+        <label class="field-label" style="font-size: 13px; color: var(--ink-dim);">🔗 ลิงก์ Google Sheets (Export CSV)</label>
+        <input type="text" class="field config-url" placeholder="https://docs.google.com/spreadsheets/d/.../export?format=csv&gid=0" value="${url}">
+      </div>
+      <div style="display: flex; justify-content: flex-end; margin-top: 4px;">
+        <button type="button" class="btn btn--ghost" style="color:var(--rose); padding: 6px 12px; font-size: 13px; border-color: rgba(239,68,68,0.2);" onclick="this.parentElement.parentElement.parentElement.remove()">🗑 ลบวิชานี้</button>
+      </div>
+    </div>
   `;
   container.appendChild(div);
 }
@@ -553,4 +563,18 @@ async function triggerSync() {
     btn.textContent = origText;
     btn.disabled = false;
   }
+}
+
+// Setup Logout Button
+const logoutBtn = document.getElementById("btn-logout");
+if (logoutBtn) {
+  logoutBtn.addEventListener("click", () => {
+    fetch(window.location.href, {
+      headers: { 'Authorization': 'Basic ' + btoa('logout:logout') }
+    }).then(() => {
+      window.location.href = '/';
+    }).catch(() => {
+      window.location.href = '/';
+    });
+  });
 }
