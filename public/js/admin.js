@@ -305,6 +305,7 @@ scoreForm.addEventListener("submit", async (e) => {
     const res = await fetch('/api/scores', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
+      credentials: 'same-origin',
       body: JSON.stringify({ id, name, work, mid, jit, final }),
     });
     if (res.ok) {
@@ -331,7 +332,10 @@ tbody.addEventListener("click", async (e) => {
     const s = students.find((x) => x.id === delId);
     if (confirm(`ลบข้อมูลของ ${s?.name} ใช่หรือไม่?`)) {
       try {
-        const res = await fetch(`/api/scores/${delId}`, { method: 'DELETE' });
+        const res = await fetch(`/api/scores/${delId}`, { 
+          method: 'DELETE',
+          credentials: 'same-origin' 
+        });
         if (res.ok) {
           await loadStudents();
         }
@@ -412,7 +416,11 @@ document.getElementById("upload-confirm-btn").addEventListener("click", () => {
   confirmBtn.disabled = true;
   confirmBtn.textContent = "กำลังอัปโหลด...";
 
-  fetch('/api/scores/upload', { method: 'POST', body: formData })
+  fetch('/api/scores/upload', { 
+    method: 'POST', 
+    credentials: 'same-origin',
+    body: formData 
+  })
     .then((res) => res.json())
     .then((data) => {
       if (data.success) {
@@ -455,7 +463,7 @@ async function openSyncSettings() {
   document.getElementById("sync-settings-overlay").classList.add("show");
   
   try {
-    const res = await fetch("/api/config");
+    const res = await fetch("/api/config", { credentials: "same-origin" });
     currentConfigs = await res.json();
     renderConfigs();
   } catch (err) {
@@ -523,11 +531,15 @@ async function saveSyncSettings() {
     const res = await fetch("/api/config", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
+      credentials: "same-origin",
       body: JSON.stringify(newConfigs)
     });
     if (res.ok) {
       alert("บันทึกการตั้งค่าแล้ว");
       closeSyncSettings();
+    } else {
+      const data = await res.json();
+      throw new Error(data.error || "Save failed");
     }
   } catch (err) {
     alert("เกิดข้อผิดพลาด: " + err.message);
@@ -544,7 +556,10 @@ async function triggerSync() {
   btn.disabled = true;
   
   try {
-    const res = await fetch("/api/scores/sync", { method: "POST" });
+    const res = await fetch("/api/scores/sync", { 
+      method: "POST",
+      credentials: "same-origin" 
+    });
     const data = await res.json();
     if (!res.ok) throw new Error(data.error || "Sync failed");
     
@@ -566,7 +581,7 @@ async function triggerSync() {
 const logoutBtn = document.getElementById("btn-logout");
 if (logoutBtn) {
   logoutBtn.addEventListener("click", () => {
-    fetch('/api/logout', { method: 'POST' })
+    fetch('/api/logout', { method: 'POST', credentials: 'same-origin' })
     .then(() => {
       window.location.href = '/login.html';
     }).catch(() => {
