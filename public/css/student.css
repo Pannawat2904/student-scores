@@ -180,3 +180,27 @@ html,body{ margin:0; padding:0; min-height:100%; background:var(--void); color:v
 #result-view { display: none; }
 #result-view.show { display: block; }
 #search-view.hide { display: none; }
+
+.admin-login-btn {
+  position: absolute;
+  top: 15px;
+  right: 20px;
+  padding: 8px 12px;
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--ink);
+  background: var(--glass-fill);
+  border: 1px solid var(--glass-border);
+  border-radius: 8px;
+  text-decoration: none;
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  box-shadow: 0 4px 12px rgba(0,0,0,0.05);
+  transition: all 0.2s ease;
+  z-index: 100;
+}
+.admin-login-btn:hover {
+  background: var(--glass-fill-strong);
+  transform: translateY(-2px);
+  color: var(--gold);
+}

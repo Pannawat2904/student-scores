@@ -15,6 +15,26 @@ const supabase = createClient(supabaseUrl, supabaseKey);
 
 app.use(cors());
 app.use(express.json());
+
+// Basic Auth Middleware
+const basicAuth = (req, res, next) => {
+  const b64auth = (req.headers.authorization || '').split(' ')[1] || '';
+  const [login, password] = Buffer.from(b64auth, 'base64').toString().split(':');
+
+  const adminUser = process.env.ADMIN_USER || 'admin';
+  const adminPass = process.env.ADMIN_PASS || 'password';
+
+  if (login && password && login === adminUser && password === adminPass) {
+    return next();
+  }
+
+  res.set('WWW-Authenticate', 'Basic realm="401"');
+  res.status(401).send('Authentication required.');
+};
+
+// Protect admin.html BEFORE static middleware
+app.use('/admin.html', basicAuth);
+
 app.use(express.static('public'));
 
 // Setup multer for file uploads
@@ -47,7 +67,7 @@ app.get('/api/scores/:id', async (req, res) => {
 });
 
 // POST /api/scores - Add or Update a single score manually
-app.post('/api/scores', async (req, res) => {
+app.post('/api/scores', basicAuth, async (req, res) => {
   const studentData = {
     id: req.body.id,
     subject: req.body.subject || 'Default',
@@ -66,7 +86,7 @@ app.post('/api/scores', async (req, res) => {
 });
 
 // DELETE /api/scores/:id - Delete a score
-app.delete('/api/scores/:id', async (req, res) => {
+app.delete('/api/scores/:id', basicAuth, async (req, res) => {
   // In a real app, you might also need the subject to delete a specific row
   // Here we just delete all records for this student id
   const { error } = await supabase.from('scores').delete().eq('id', req.params.id);
@@ -82,7 +102,7 @@ app.get('/api/config', async (req, res) => {
 });
 
 // POST /api/config - Save sync configurations (Expects array of configs)
-app.post('/api/config', async (req, res) => {
+app.post('/api/config', basicAuth, async (req, res) => {
   const configs = req.body;
   if (!Array.isArray(configs)) return res.status(400).json({ error: 'Expected an array of configs' });
   
@@ -193,7 +213,7 @@ function processCSVContent(content, subject) {
 }
 
 // POST /api/scores/upload - Upload and parse CSV
-app.post('/api/scores/upload', upload.single('file'), async (req, res) => {
+app.post('/api/scores/upload', basicAuth, upload.single('file'), async (req, res) => {
   if (!req.file) {
     return res.status(400).json({ error: 'No file uploaded' });
   }
@@ -214,7 +234,7 @@ app.post('/api/scores/upload', upload.single('file'), async (req, res) => {
 });
 
 // POST /api/scores/sync - Trigger sync from all configured Google Sheets
-app.post('/api/scores/sync', async (req, res) => {
+app.post('/api/scores/sync', basicAuth, async (req, res) => {
   const { data: configs, error: configError } = await supabase.from('configs').select('*');
   if (configError) return res.status(500).json({ error: configError.message });
   if (!configs || configs.length === 0) {
