@@ -183,24 +183,31 @@ html,body{ margin:0; padding:0; min-height:100%; background:var(--void); color:v
 
 .admin-login-btn {
   position: absolute;
-  top: 15px;
-  right: 20px;
-  padding: 8px 12px;
+  top: 20px;
+  right: 24px;
+  padding: 8px 16px;
   font-size: 14px;
   font-weight: 500;
-  color: var(--ink);
-  background: var(--glass-fill);
-  border: 1px solid var(--glass-border);
-  border-radius: 8px;
+  color: var(--ink-dim);
+  background: rgba(255, 255, 255, 0.4);
+  border: 1px solid rgba(255, 255, 255, 0.6);
+  border-radius: 30px;
   text-decoration: none;
-  backdrop-filter: blur(8px);
-  -webkit-backdrop-filter: blur(8px);
-  box-shadow: 0 4px 12px rgba(0,0,0,0.05);
-  transition: all 0.2s ease;
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.03), inset 0 0 0 1px rgba(255, 255, 255, 0.3);
+  transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
   z-index: 100;
+  display: flex;
+  align-items: center;
+  gap: 6px;
 }
 .admin-login-btn:hover {
-  background: var(--glass-fill-strong);
-  transform: translateY(-2px);
+  background: rgba(255, 255, 255, 0.8);
   color: var(--gold);
+  transform: translateY(-2px) scale(1.02);
+  box-shadow: 0 8px 25px rgba(245, 158, 11, 0.15), inset 0 0 0 1px rgba(255, 255, 255, 0.8);
+}
+.admin-login-btn:active {
+  transform: translateY(0) scale(0.98);
 }
