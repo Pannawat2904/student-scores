@@ -15,10 +15,15 @@ CREATE TABLE IF NOT EXISTS public.scores (
     jit NUMERIC DEFAULT 0,
     final NUMERIC DEFAULT 0,
     total NUMERIC DEFAULT 0,
+    assignments JSONB NOT NULL DEFAULT '[]'::jsonb,
     grade TEXT,
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL,
     PRIMARY KEY (id, subject)
 );
+
+-- Run this as well when the scores table already exists.
+ALTER TABLE public.scores
+ADD COLUMN IF NOT EXISTS assignments JSONB NOT NULL DEFAULT '[]'::jsonb;
 
 -- Setup RLS (Row Level Security) - Allowing anonymous access for this simple project
 ALTER TABLE public.configs ENABLE ROW LEVEL SECURITY;

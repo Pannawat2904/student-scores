@@ -254,6 +254,19 @@ function processCSVContent(content, subject) {
     throw new Error('ไม่พบรูปแบบตารางคะแนนที่รองรับในไฟล์ CSV นี้');
   }
 
+  // Google Sheets exports often have more than one header row.  Combine the
+  // labels so that a grouped heading (for example "งาน") retains the actual
+  // assignment name from the row below it.
+  const columnHeaders = [];
+  for (let c = 0; c < (records[subHeaderIndex] || []).length; c++) {
+    const labels = [];
+    for (let r = 0; r <= subHeaderIndex; r++) {
+      const label = (records[r][c] || '').trim();
+      if (label && !labels.includes(label)) labels.push(label);
+    }
+    columnHeaders[c] = labels.join(' — ');
+  }
+
   let workCol = -1, midCol = -1, jitCol = -1, finalCol = -1, totalCol = -1;
   for (let r = 0; r <= subHeaderIndex; r++) {
     for (let c = 5; c < records[r].length; c++) {
@@ -265,6 +278,27 @@ function processCSVContent(content, subject) {
       if (h.includes('คะแนนรวม')) totalCol = c;
     }
   }
+
+  const summaryColumns = new Set([workCol, midCol, jitCol, finalCol, totalCol]);
+  const assignmentColumns = columnHeaders
+    .map((name, index) => ({ name, index }))
+    // Columns 0–4 contain row number and student details in the supported export.
+    .filter(({ name, index }) => index >= 5 && name && !summaryColumns.has(index))
+    .filter(({ name }) => !/^(ลำดับ|รหัส|ชื่อ|นามสกุล|ห้อง|ชั้น|กลุ่ม|เลขที่)(\s|$)/.test(name));
+
+  const parseAssignmentScore = (value) => {
+    const text = (value || '').trim();
+    if (text === '') return null;
+    const score = Number.parseFloat(text.replace(/,/g, ''));
+    return Number.isFinite(score) ? score : null;
+  };
+
+  const getMaxScore = (name) => {
+    const match = name.match(/(?:เต็ม|คะแนน|ข้อ)\s*(\d+(?:\.\d+)?)/) || name.match(/\(\s*(\d+(?:\.\d+)?)\s*\)/);
+    return match ? Number.parseFloat(match[1]) : null;
+  };
+
+  const isTest = (name) => /ทดสอบ|แบบสอบ|ข้อสอบ|สอบย่อย|quiz/i.test(name);
 
   const parsedStudents = [];
   for (let i = dataStartIndex; i < records.length; i++) {
@@ -285,7 +319,18 @@ function processCSVContent(content, subject) {
        total = work + mid + jit + final; 
     }
 
-    parsedStudents.push({ id, name, subject, work, mid, jit, final, total });
+    const assignments = assignmentColumns.map(({ name: assignmentName, index }) => {
+      const score = parseAssignmentScore(row[index]);
+      return {
+        name: assignmentName,
+        score,
+        max: getMaxScore(assignmentName),
+        type: isTest(assignmentName) ? 'test' : 'work',
+        status: score === null ? 'missing' : 'submitted'
+      };
+    });
+
+    parsedStudents.push({ id, name, subject, work, mid, jit, final, total, assignments });
   }
   return parsedStudents;
 }

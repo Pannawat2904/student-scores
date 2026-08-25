@@ -133,100 +133,36 @@ function renderResult(id, data) {
   sumGrade.style.background = gc.bg;
   sumGrade.style.color = gc.fg;
 
-  // Assignments & Quizzes
+  // Individual assignments & quizzes.  A blank cell in the source sheet is
+  // intentionally shown as "ยังไม่มีคะแนน" so students can follow up on work
+  // that may not have been submitted or has not yet been marked.
   const unitGrid = document.getElementById("unit-grid");
   const itemGrid = document.getElementById("item-grid");
+  const assignments = Array.isArray(data.assignments) ? data.assignments : [];
+  const tests = assignments.filter(a => a.type === 'test' || /ทดสอบ|แบบสอบ|ข้อสอบ|สอบย่อย|quiz/i.test(a.name));
+  const works = assignments.filter(a => !tests.includes(a));
+  const escapeHTML = (value) => String(value ?? '').replace(/[&<>"']/g, char => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[char]);
+  const renderItems = (items) => items.map(item => {
+    const missing = item.score === null || item.score === undefined || item.status === 'missing';
+    const score = missing ? '—' : round1(item.score);
+    const max = item.max === null || item.max === undefined ? '' : ` / ${round1(item.max)}`;
+    return `<div class="item-row glass ${missing ? 'item-row--missing' : ''}">
+      <span class="t" title="${escapeHTML(item.name)}">${escapeHTML(item.name)}</span>
+      <div class="r">
+        <span class="sc ${missing ? 'missing' : ''}">${score}${max}</span>
+        <span class="pill ${missing ? 'status-missing' : 'status-ok'}">${missing ? 'ยังไม่มีคะแนน' : 'มีคะแนนแล้ว'}</span>
+      </div>
+    </div>`;
+  }).join('');
 
-  if (data.assignments) {
-    const tests = data.assignments.filter(a => a.name.includes("ทดสอบ") || a.name.includes("สอบ"));
-    const works = data.assignments.filter(a => !a.name.includes("ทดสอบ") && !a.name.includes("สอบ"));
-
-    const quizzesByUnit = {};
-    const standaloneTests = [];
-
-    tests.forEach(t => {
-      const match = t.name.match(/หน่วย\s*(ที่\s*)?(\d+)/);
-      if (match) {
-        const unitNum = match[2];
-        const unitName = `หน่วยที่ ${unitNum}`;
-        if (!quizzesByUnit[unitName]) quizzesByUnit[unitName] = { unit: unitName, pre: null, post: null };
-
-        const isPre = t.name.includes("ก่อน");
-        let max = 10;
-        const maxMatch = t.name.match(/(\d+)\s*ข้อ/);
-        if (maxMatch) max = parseInt(maxMatch[1], 10);
-        else {
-          const m = t.name.match(/หลัง\s*(\d+)/) || t.name.match(/ก่อน\s*(\d+)/);
-          if (m) max = parseInt(m[1], 10);
-        }
-
-        const label = t.name.replace(/แบบทดสอบหน่วย(ที่)?\s*\d+\s*/, "").replace(/[\(\)]/g, "").trim() || (isPre ? "ก่อนเรียน" : "หลังเรียน");
-        const val = t.status === "submitted" ? t.score : null;
-        
-        // We will assign it to pre or post based on name, if both are populated we just add it to post
-        if (isPre) {
-          if(!quizzesByUnit[unitName].pre) quizzesByUnit[unitName].pre = { label, val, max };
-        } else {
-          quizzesByUnit[unitName].post = { label, val, max };
-        }
-      } else {
-        standaloneTests.push(t);
-      }
-    });
-
-    const quizList = Object.values(quizzesByUnit);
-
-    if (quizList.length > 0) {
-      unitGrid.innerHTML = quizList.map(q => `
-        <div class="unit-card glass">
-          <p class="u-title">${q.unit}</p>
-          <div class="chip-row">
-            ${[q.pre, q.post].filter(Boolean).map(part => `
-              <div class="chip ${part.val === null ? 'missing' : ''}">
-                <div class="c-label">
-                  <span>${part.label}</span>
-                  <span class="c-status ${part.val === null ? 'status-missing' : 'status-ok'}">${part.val === null ? 'ยังไม่ส่ง' : 'ส่งแล้ว'}</span>
-                </div>
-                <div class="c-val">${part.val === null ? '—' : part.val} <span style="font-size:11px; color:var(--ink-dim); font-weight:400;">/ ${part.max}</span></div>
-              </div>
-            `).join("")}
-          </div>
-        </div>
-      `).join("");
-    } else {
-      unitGrid.innerHTML = `<p style="color:var(--ink-dim); font-size:14px; padding:10px;">ไม่มีข้อมูลแบบทดสอบรายหน่วย</p>`;
-    }
-
-    const allWorks = [...works, ...standaloneTests];
-    if (allWorks.length > 0) {
-      itemGrid.innerHTML = allWorks.map(it => {
-        const isSubmitted = it.status === 'submitted';
-        const val = isSubmitted ? it.score : null;
-        return `
-          <div class="item-row glass">
-            <span class="t" title="${it.name}">${it.name}</span>
-            <div class="r">
-              <span class="sc ${val === null ? 'missing' : ''}">${val === null ? '—' : val}</span>
-              <span class="pill ${val === null ? 'status-missing' : 'status-ok'}">${val === null ? 'ยังไม่ส่ง' : 'ส่งแล้ว'}</span>
-            </div>
-          </div>
-        `;
-      }).join("");
-    } else {
-      itemGrid.innerHTML = `<p style="color:var(--ink-dim); font-size:14px; padding:10px;">ไม่มีข้อมูลภาระงาน</p>`;
-    }
-  }
+  unitGrid.innerHTML = tests.length ? renderItems(tests) : '<p class="empty-items">ไม่มีข้อมูลแบบทดสอบรายข้อ</p>';
+  itemGrid.innerHTML = works.length ? renderItems(works) : '<p class="empty-items">ไม่มีข้อมูลงานในชั้นเรียน</p>';
 
   // Hide assignment sections if no data
   const sectionQuiz = document.getElementById("section-quiz");
   const sectionWork = document.getElementById("section-work");
-  if (!data.assignments || data.assignments.length === 0) {
-    if(sectionQuiz) sectionQuiz.style.display = 'none';
-    if(sectionWork) sectionWork.style.display = 'none';
-  } else {
-    if(sectionQuiz) sectionQuiz.style.display = '';
-    if(sectionWork) sectionWork.style.display = '';
-  }
+  if(sectionQuiz) sectionQuiz.style.display = '';
+  if(sectionWork) sectionWork.style.display = '';
 
   // Hide admin button when viewing result
   const adminBtn = document.querySelector('.admin-login-btn');
