@@ -487,22 +487,15 @@ function addConfigRow(subject = '', url = '') {
   const div = document.createElement("div");
   div.className = "field-group";
   div.style.marginBottom = "15px";
-  div.style.padding = "10px";
-  div.style.border = "1px solid rgba(255,255,255,0.1)";
-  div.style.borderRadius = "8px";
+  div.style.paddingBottom = "15px";
+  div.style.borderBottom = "1px solid var(--glass-border)";
   
   div.innerHTML = `
     <div style="display: flex; flex-direction: column; gap: 8px;">
-      <div>
-        <label class="field-label" style="font-size: 13px; color: var(--ink-dim);">📚 ชื่อวิชา</label>
-        <input type="text" class="field config-subject" placeholder="เช่น วิชาโปรแกรมฐานข้อมูล" value="${subject}">
-      </div>
-      <div>
-        <label class="field-label" style="font-size: 13px; color: var(--ink-dim);">🔗 ลิงก์ Google Sheets (Export CSV)</label>
-        <input type="text" class="field config-url" placeholder="https://docs.google.com/spreadsheets/d/.../export?format=csv&gid=0" value="${url}">
-      </div>
-      <div style="display: flex; justify-content: flex-end; margin-top: 4px;">
-        <button type="button" class="btn btn--ghost" style="color:var(--rose); padding: 6px 12px; font-size: 13px; border-color: rgba(239,68,68,0.2);" onclick="this.parentElement.parentElement.parentElement.remove()">🗑 ลบวิชานี้</button>
+      <input type="text" class="field config-subject" placeholder="ชื่อวิชา (เช่น คณิตศาสตร์)" value="${subject}" style="font-weight: 500;">
+      <div style="display: flex; gap: 8px;">
+        <input type="text" class="field config-url" placeholder="วางลิงก์ Google Sheets..." value="${url}" style="flex: 1; font-size: 13px;">
+        <button type="button" class="btn btn--ghost" style="color:var(--rose); padding: 0 12px; border: 1px solid rgba(239,68,68,0.2);" aria-label="ลบ" onclick="this.parentElement.parentElement.parentElement.remove()">🗑</button>
       </div>
     </div>
   `;
