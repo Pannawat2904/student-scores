@@ -517,7 +517,7 @@ async function saveSyncSettings() {
     let url = r.querySelector(".config-url").value.trim();
     if (subject && url) {
       if (url.includes('/edit')) {
-        url = url.replace(/\/edit.*$/, '/export?format=csv&gid=0');
+        url = url.replace(/\/edit.*$/, '/export?format=csv');
       }
       newConfigs.push({ subject, url });
     }
