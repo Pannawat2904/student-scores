@@ -1,0 +1,255 @@
+require('dotenv').config();
+const express = require('express');
+const cors = require('cors');
+const path = require('path');
+const multer = require('multer');
+const { createClient } = require('@supabase/supabase-js');
+
+const app = express();
+const PORT = process.env.PORT || 3000;
+
+// Supabase setup
+const supabaseUrl = process.env.SUPABASE_URL || '';
+const supabaseKey = process.env.SUPABASE_KEY || '';
+const supabase = createClient(supabaseUrl, supabaseKey);
+
+app.use(cors());
+app.use(express.json());
+app.use(express.static('public'));
+
+// Setup multer for file uploads
+const storage = multer.memoryStorage();
+const upload = multer({ storage: storage });
+
+// GET /api/scores - Get all scores
+app.get('/api/scores', async (req, res) => {
+  const { data, error } = await supabase.from('scores').select('*');
+  if (error) return res.status(500).json({ error: error.message });
+  res.json(data);
+});
+
+// GET /api/scores/:id - Get a single student's score
+app.get('/api/scores/:id', async (req, res) => {
+  const subject = req.query.subject;
+  let query = supabase.from('scores').select('*').eq('id', req.params.id);
+  if (subject) {
+    query = query.eq('subject', subject);
+  }
+  
+  const { data, error } = await query;
+  if (error) return res.status(500).json({ error: error.message });
+  
+  if (data && data.length > 0) {
+    res.json(data[0]); // Return the first match if multiple
+  } else {
+    res.status(404).json({ error: 'Student not found' });
+  }
+});
+
+// POST /api/scores - Add or Update a single score manually
+app.post('/api/scores', async (req, res) => {
+  const studentData = {
+    id: req.body.id,
+    subject: req.body.subject || 'Default',
+    name: req.body.name,
+    work: parseFloat(req.body.work) || 0,
+    mid: parseFloat(req.body.mid) || 0,
+    jit: parseFloat(req.body.jit) || 0,
+    final: parseFloat(req.body.final) || 0,
+  };
+  studentData.total = studentData.work + studentData.mid + studentData.jit + studentData.final;
+
+  const { error } = await supabase.from('scores').upsert(studentData, { onConflict: 'id, subject' });
+  if (error) return res.status(500).json({ error: error.message });
+  
+  res.json({ success: true, message: 'Score saved' });
+});
+
+// DELETE /api/scores/:id - Delete a score
+app.delete('/api/scores/:id', async (req, res) => {
+  // In a real app, you might also need the subject to delete a specific row
+  // Here we just delete all records for this student id
+  const { error } = await supabase.from('scores').delete().eq('id', req.params.id);
+  if (error) return res.status(500).json({ error: error.message });
+  res.json({ success: true, message: 'Score deleted' });
+});
+
+// GET /api/config - Get sync configurations
+app.get('/api/config', async (req, res) => {
+  const { data, error } = await supabase.from('configs').select('*');
+  if (error) return res.status(500).json({ error: error.message });
+  res.json(data);
+});
+
+// POST /api/config - Save sync configurations (Expects array of configs)
+app.post('/api/config', async (req, res) => {
+  const configs = req.body;
+  if (!Array.isArray(configs)) return res.status(400).json({ error: 'Expected an array of configs' });
+  
+  // First, delete all existing configs (simple replacement strategy)
+  await supabase.from('configs').delete().neq('subject', 'xxxxxx');
+  
+  if (configs.length > 0) {
+    const { error } = await supabase.from('configs').insert(configs);
+    if (error) return res.status(500).json({ error: error.message });
+  }
+  
+  res.json({ success: true, message: 'Config saved' });
+});
+
+// CSV Parsing Helpers
+function parseCSVLine(line) {
+  const result = [];
+  let current = '';
+  let inQuotes = false;
+  for (let i = 0; i < line.length; i++) {
+    const char = line[i];
+    if (char === '"' && line[i+1] === '"') {
+      current += '"';
+      i++;
+    } else if (char === '"') {
+      inQuotes = !inQuotes;
+    } else if (char === ',' && !inQuotes) {
+      result.push(current);
+      current = '';
+    } else {
+      current += char;
+    }
+  }
+  result.push(current);
+  return result;
+}
+
+function processCSVContent(content, subject) {
+  let inQuotes = false;
+  let cleanContent = '';
+  for(let i=0; i<content.length; i++){
+    if(content[i] === '"') inQuotes = !inQuotes;
+    if(content[i] === '\n' && inQuotes) {
+      cleanContent += ' ';
+    } else {
+      cleanContent += content[i];
+    }
+  }
+
+  const lines = cleanContent.split('\n').map(l => l.trim()).filter(l => l);
+  const records = lines.map(parseCSVLine);
+
+  let dataStartIndex = -1;
+  let subHeaderIndex = -1;
+
+  for (let i = 0; i < records.length; i++) {
+    const row = records[i];
+    if (row[1] && row[1].match(/^\d{11}$/)) {
+      if (dataStartIndex === -1) {
+        dataStartIndex = i;
+        break;
+      }
+    }
+  }
+
+  if (dataStartIndex > 0) {
+    subHeaderIndex = dataStartIndex - 1;
+  }
+
+  if (dataStartIndex === -1) {
+    throw new Error('ไม่พบรูปแบบตารางคะแนนที่รองรับในไฟล์ CSV นี้');
+  }
+
+  let workCol = -1, midCol = -1, jitCol = -1, finalCol = -1, totalCol = -1;
+  for (let r = 0; r <= subHeaderIndex; r++) {
+    for (let c = 5; c < records[r].length; c++) {
+      const h = (records[r][c] || '').trim();
+      if (h.includes('คะแนนเก็บ')) workCol = c;
+      if (h.includes('ระหว่างเรียน')) midCol = c;
+      if (h.includes('จิตพิสัย') && jitCol === -1) jitCol = c;
+      if (h.includes('ปลายภาค')) finalCol = c;
+      if (h.includes('คะแนนรวม')) totalCol = c;
+    }
+  }
+
+  const parsedStudents = [];
+  for (let i = dataStartIndex; i < records.length; i++) {
+    const row = records[i];
+    if (!row[1] || !row[1].match(/^\d{11}$/)) continue;
+    
+    const id = row[1].trim();
+    const name = row[2].trim();
+    
+    let work = workCol !== -1 ? (parseFloat((row[workCol] || '').trim()) || 0) : 0;
+    let mid = midCol !== -1 ? (parseFloat((row[midCol] || '').trim()) || 0) : 0;
+    let jit = jitCol !== -1 ? (parseFloat((row[jitCol] || '').trim()) || 0) : 0;
+    let final = finalCol !== -1 ? (parseFloat((row[finalCol] || '').trim()) || 0) : 0;
+    let total = totalCol !== -1 ? (parseFloat((row[totalCol] || '').trim()) || 0) : 0;
+
+    if (total === 0) {
+       // Fallback total calculation if no specific total column is found
+       total = work + mid + jit + final; 
+    }
+
+    parsedStudents.push({ id, name, subject, work, mid, jit, final, total });
+  }
+  return parsedStudents;
+}
+
+// POST /api/scores/upload - Upload and parse CSV
+app.post('/api/scores/upload', upload.single('file'), async (req, res) => {
+  if (!req.file) {
+    return res.status(400).json({ error: 'No file uploaded' });
+  }
+
+  const subject = req.body.subject || 'Unknown Subject';
+  const content = req.file.buffer.toString();
+  
+  try {
+    const parsedStudents = processCSVContent(content, subject);
+    if (parsedStudents.length > 0) {
+      const { error } = await supabase.from('scores').upsert(parsedStudents, { onConflict: 'id, subject' });
+      if (error) throw error;
+    }
+    res.json({ success: true, count: parsedStudents.length, message: 'CSV uploaded and processed' });
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
+// POST /api/scores/sync - Trigger sync from all configured Google Sheets
+app.post('/api/scores/sync', async (req, res) => {
+  const { data: configs, error: configError } = await supabase.from('configs').select('*');
+  if (configError) return res.status(500).json({ error: configError.message });
+  if (!configs || configs.length === 0) {
+    return res.status(400).json({ error: 'No sync configurations found' });
+  }
+
+  let totalProcessed = 0;
+  const errors = [];
+
+  for (const conf of configs) {
+    try {
+      if (!conf.url || !conf.subject) continue;
+      const response = await fetch(conf.url);
+      if (!response.ok) throw new Error(`Failed to fetch: ${response.statusText}`);
+      
+      const content = await response.text();
+      const parsedStudents = processCSVContent(content, conf.subject);
+      
+      if (parsedStudents.length > 0) {
+        const { error: upsertError } = await supabase.from('scores').upsert(parsedStudents, { onConflict: 'id, subject' });
+        if (upsertError) throw upsertError;
+        totalProcessed += parsedStudents.length;
+      }
+    } catch (err) {
+      errors.push(`วิชา ${conf.subject}: ${err.message}`);
+    }
+  }
+
+  if (errors.length > 0 && totalProcessed === 0) {
+    res.status(500).json({ error: errors.join(', ') });
+  } else {
+    res.json({ success: true, count: totalProcessed, message: 'Synced successfully' });
+  }
+});
+
+app.listen(PORT, () => {
+  console.log(`Server is running on http://localhost:${PORT}`);
+});

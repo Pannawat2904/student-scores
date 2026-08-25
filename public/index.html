@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ตรวจสอบคะแนน — ระบบติดตามผลการเรียน</title>
+<link rel="stylesheet" href="css/student.css?v=21">
+</head>
+<body>
+
+<div class="aurora" aria-hidden="true">
+  <div class="aurora__blob aurora__blob--a"></div>
+  <div class="aurora__blob aurora__blob--b"></div>
+  <div class="aurora__blob aurora__blob--c"></div>
+</div>
+
+<div id="search-view" class="wrap">
+  <div class="search-hero">
+    <p class="eyebrow" style="margin:0; text-align:center;">ตรวจสอบผลการเรียน</p>
+    <h1>ระบบตรวจสอบคะแนน</h1>
+    <p style="margin-top:-5px; margin-bottom:15px; font-weight:500; font-size:16px; color:var(--ink);">รายวิชาของ ครูปาณวัฐ รักรอดจิต</p>
+    <p>กรุณาเลือกวิชาและกรอกรหัสนักเรียนเพื่อตรวจสอบผลการเรียน</p>
+  </div>
+  
+  <section class="search-card glass" aria-label="ค้นหาคะแนนด้วยรหัสนักเรียน">
+    <form class="search-form-stacked" id="search-form">
+      <div class="form-group">
+        <label class="field-label" for="subject-filter">เลือกวิชา</label>
+        <select class="field" id="subject-filter" required style="cursor: pointer;">
+          <option value="" disabled selected>-- โปรดเลือกวิชา --</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label class="field-label" for="student-id">รหัสประจำตัวนักเรียน</label>
+        <input class="field" id="student-id" name="student-id" type="text" inputmode="numeric" placeholder="กรอกรหัสประจำตัวนักเรียน" autocomplete="off" required>
+      </div>
+      <button type="submit" class="btn btn--gold" id="submit-btn" style="margin-top: 10px;">ตรวจสอบคะแนน</button>
+    </form>
+    <p class="error-msg" id="error-msg">ไม่พบรหัสนักเรียนนี้ในระบบ กรุณาตรวจสอบรหัสอีกครั้ง</p>
+  </section>
+</div>
+
+<div id="result-view">
+  <header class="topbar">
+    <div class="topbar-left">
+      <a class="back-btn" href="#" id="back-btn" aria-label="ย้อนกลับ">←</a>
+      <div class="topbar-id">
+        <div class="n" id="tb-name">—</div>
+        <div class="i" id="tb-code">—</div>
+      </div>
+    </div>
+    <div class="topbar-total" id="tb-total">รวม 0 / 100</div>
+  </header>
+
+  <div class="wrap">
+    <section class="hero glass">
+      <div class="hero-id">
+        <p class="eyebrow" id="hero-subject">—</p>
+        <h1 class="hero-name" id="hero-name">—</h1>
+        <p class="hero-code" id="hero-code">—</p>
+      </div>
+      <div class="dial-wrap">
+        <svg viewBox="0 0 100 100">
+          <circle class="dial-track" cx="50" cy="50" r="45"></circle>
+          <circle class="dial-fill" id="dial-fill" cx="50" cy="50" r="45"></circle>
+        </svg>
+        <div class="dial-center">
+          <span class="dial-total" id="dial-total">0</span>
+          <span class="dial-sub">/ 100</span>
+          <span class="dial-grade" id="dial-grade">เกรด —</span>
+        </div>
+      </div>
+    </section>
+
+    <div class="metric-grid">
+      <div class="metric-card glass">
+        <div class="l">คะแนนเก็บ (งาน)</div>
+        <div class="v"><span id="m-work">0</span><small>/30</small></div>
+        <div class="metric-track"><div class="metric-fill" id="mf-work" style="background:linear-gradient(90deg,var(--gold-soft),var(--gold));"></div></div>
+      </div>
+      <div class="metric-card glass">
+        <div class="l">สอบระหว่างเรียน</div>
+        <div class="v"><span id="m-mid">0</span><small>/20</small></div>
+        <div class="metric-track"><div class="metric-fill" id="mf-mid" style="background:linear-gradient(90deg,var(--gold-soft),var(--gold));"></div></div>
+      </div>
+      <div class="metric-card glass">
+        <div class="l">จิตพิสัย</div>
+        <div class="v"><span id="m-jit">0</span><small>/20</small></div>
+        <div class="metric-track"><div class="metric-fill" id="mf-jit" style="background:linear-gradient(90deg,var(--gold-soft),var(--gold));"></div></div>
+      </div>
+      <div class="metric-card glass">
+        <div class="l">สอบปลายภาค</div>
+        <div class="v"><span id="m-final">0</span><small>/30</small></div>
+        <div class="metric-track"><div class="metric-fill" id="mf-final" style="background:linear-gradient(90deg,var(--gold-soft),var(--gold));"></div></div>
+      </div>
+    </div>
+
+    <section class="section" id="section-quiz">
+      <div class="section-head">
+        <div class="ic" style="background:var(--mint-dim); color:var(--mint);">◎</div>
+        <div>
+          <h2>คะแนนแบบทดสอบระหว่างเรียน</h2>
+          <p>ผลทดสอบย่อยแยกตามแบบทดสอบ</p>
+        </div>
+      </div>
+      <div class="unit-grid" id="unit-grid"></div>
+    </section>
+
+    <section class="section" id="section-work">
+      <div class="section-head">
+        <div class="ic" style="background:var(--gold-dim); color:var(--gold-soft);">▤</div>
+        <div>
+          <h2>คะแนนเก็บระหว่างเรียน</h2>
+          <p>ใบงานและภาระงานที่มอบหมายตลอดภาคเรียน</p>
+        </div>
+      </div>
+      <div class="item-grid" id="item-grid"></div>
+    </section>
+
+    <section class="section" id="section-total">
+      <div class="section-head">
+        <div class="ic" style="background:rgba(255,255,255,0.08); color:var(--ink);">Σ</div>
+        <div>
+          <h2>คะแนนรวม</h2>
+          <p>สรุปคะแนนทั้ง 4 องค์ประกอบ เต็ม 100 คะแนน</p>
+        </div>
+      </div>
+
+      <div class="summary-panel glass">
+        <div class="score-row">
+          <span class="label">คะแนนเก็บ (งาน)</span>
+          <div class="track"><div class="fill" id="sf-work"></div></div>
+          <span class="val" id="sv-work">0 / 30</span>
+        </div>
+        <div class="score-row">
+          <span class="label">สอบระหว่างเรียน</span>
+          <div class="track"><div class="fill" id="sf-mid"></div></div>
+          <span class="val" id="sv-mid">0 / 20</span>
+        </div>
+        <div class="score-row">
+          <span class="label">จิตพิสัย</span>
+          <div class="track"><div class="fill" id="sf-jit"></div></div>
+          <span class="val" id="sv-jit">0 / 20</span>
+        </div>
+        <div class="score-row">
+          <span class="label">สอบปลายภาค</span>
+          <div class="track"><div class="fill" id="sf-final"></div></div>
+          <span class="val" id="sv-final">0 / 30</span>
+        </div>
+        <div class="summary-foot">
+          <div>
+            <p class="tl">คะแนนรวมทั้งหมด</p>
+            <p class="tn"><span id="sum-total">0</span><span style="font-size:16px; color:var(--ink-dim);"> /100</span></p>
+          </div>
+          <span class="badge-lg" id="sum-grade">เกรด —</span>
+        </div>
+      </div>
+    </section>
+
+  </div>
+</div>
+
+<script src="js/app.js?v=11"></script>
+</body>
+</html>

@@ -1,0 +1,913 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>จัดการคะแนน — วิชาโปรแกรมฐานข้อมูล</title>
+<style>
+/* ============================================================
+   ระบบตรวจสอบคะแนนนักเรียน — Shared Design Tokens
+   วิชาโปรแกรมฐานข้อมูล
+   ============================================================ */
+
+@import url('https://fonts.googleapis.com/css2?family=Noto+Serif+Thai:wght@500;600;700&family=IBM+Plex+Sans+Thai:wght@300;400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap');
+
+:root{
+  /* -- surfaces -- */
+  --void:#0A0E1A;
+  --void-2:#0D1424;
+  --panel:#121A2E;
+  --panel-2:#182238;
+
+  /* -- glass -- */
+  --glass-fill: rgba(255,255,255,0.055);
+  --glass-fill-strong: rgba(255,255,255,0.09);
+  --glass-border: rgba(255,255,255,0.13);
+  --glass-border-strong: rgba(255,255,255,0.22);
+
+  /* -- accent: champagne gold (premium) -- */
+  --gold:#D9AF6C;
+  --gold-soft:#F0D9AC;
+  --gold-dim: rgba(217,175,108,0.16);
+
+  /* -- semantic -- */
+  --mint:#4ADE80;
+  --mint-dim: rgba(74,222,128,0.14);
+  --rose:#FB7185;
+  --rose-dim: rgba(251,113,133,0.14);
+  --amber:#FBBF24;
+  --amber-dim: rgba(251,191,36,0.14);
+
+  /* -- ink -- */
+  --ink:#EDEEF3;
+  --ink-dim:#9AA2B8;
+  --ink-faint:#5F6780;
+
+  /* -- type -- */
+  --f-display:'Noto Serif Thai', serif;
+  --f-body:'IBM Plex Sans Thai', sans-serif;
+  --f-mono:'IBM Plex Mono', monospace;
+
+  --radius-lg:22px;
+  --radius-md:14px;
+  --radius-sm:9px;
+
+  --ease: cubic-bezier(.22,.9,.32,1.04);
+}
+
+*{ box-sizing:border-box; }
+
+html,body{
+  margin:0;
+  padding:0;
+  min-height:100%;
+  background: var(--void);
+  color: var(--ink);
+  font-family: var(--f-body);
+  -webkit-font-smoothing: antialiased;
+}
+
+::selection{ background: var(--gold-dim); color: var(--gold-soft); }
+
+a{ color: var(--gold-soft); }
+
+/* -------------------------------------------------
+   Aurora background — soft, slow, low-opacity blobs
+   ------------------------------------------------- */
+.aurora{
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  overflow: hidden;
+  background:
+    radial-gradient(1100px 700px at 12% -10%, rgba(76,41,140,0.35), transparent 60%),
+    radial-gradient(900px 600px at 100% 10%, rgba(15,60,110,0.30), transparent 55%),
+    radial-gradient(700px 500px at 50% 110%, rgba(120,80,30,0.18), transparent 60%),
+    linear-gradient(180deg, var(--void) 0%, var(--void-2) 100%);
+}
+.aurora__blob{
+  position:absolute;
+  border-radius:50%;
+  filter: blur(90px);
+  opacity:.55;
+  will-change: transform;
+}
+.aurora__blob--a{ width:520px; height:520px; left:-120px; top:-140px; background: radial-gradient(circle, #4C1D95, transparent 70%); animation: drift1 26s ease-in-out infinite; }
+.aurora__blob--b{ width:460px; height:460px; right:-100px; top:10%; background: radial-gradient(circle, #1E3A8A, transparent 70%); animation: drift2 32s ease-in-out infinite; }
+.aurora__blob--c{ width:420px; height:420px; left:30%; bottom:-180px; background: radial-gradient(circle, #7C4A12, transparent 70%); animation: drift3 30s ease-in-out infinite; }
+
+@keyframes drift1{ 0%,100%{ transform: translate(0,0);} 50%{ transform: translate(60px,40px);} }
+@keyframes drift2{ 0%,100%{ transform: translate(0,0);} 50%{ transform: translate(-50px,60px);} }
+@keyframes drift3{ 0%,100%{ transform: translate(0,0);} 50%{ transform: translate(40px,-50px);} }
+
+@media (prefers-reduced-motion: reduce){
+  .aurora__blob{ animation: none !important; }
+}
+
+/* -------------------------------------------------
+   Glass surfaces
+   ------------------------------------------------- */
+.glass{
+  position:relative;
+  background: var(--glass-fill);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-lg);
+  backdrop-filter: blur(22px) saturate(140%);
+  -webkit-backdrop-filter: blur(22px) saturate(140%);
+  box-shadow: 0 24px 60px -20px rgba(0,0,0,0.55), inset 0 1px 0 rgba(255,255,255,0.05);
+}
+.glass--flat{
+  background: var(--glass-fill);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-md);
+  backdrop-filter: blur(16px) saturate(130%);
+  -webkit-backdrop-filter: blur(16px) saturate(130%);
+}
+
+/* -------------------------------------------------
+   Typography helpers
+   ------------------------------------------------- */
+.eyebrow{
+  font-family: var(--f-mono);
+  font-size: 12px;
+  letter-spacing: .18em;
+  text-transform: uppercase;
+  color: var(--gold-soft);
+  opacity:.85;
+}
+.headline{
+  font-family: var(--f-display);
+  font-weight: 600;
+  color: var(--ink);
+  letter-spacing: -0.01em;
+}
+.headline .accent{ color: var(--gold-soft); }
+.muted{ color: var(--ink-dim); }
+.mono{ font-family: var(--f-mono); }
+
+/* -------------------------------------------------
+   Buttons
+   ------------------------------------------------- */
+.btn{
+  appearance:none;
+  border:none;
+  cursor:pointer;
+  font-family: var(--f-body);
+  font-weight:500;
+  font-size:15px;
+  border-radius: 12px;
+  padding: 13px 22px;
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  gap:8px;
+  transition: transform .15s var(--ease), box-shadow .2s var(--ease), background .2s var(--ease), border-color .2s var(--ease);
+}
+.btn:active{ transform: scale(.97); }
+.btn:focus-visible{ outline: 2px solid var(--gold-soft); outline-offset: 2px; }
+
+.btn--gold{
+  background: linear-gradient(180deg, var(--gold-soft), var(--gold));
+  color: #241705;
+  box-shadow: 0 12px 30px -10px rgba(217,175,108,0.55);
+}
+.btn--gold:hover{ box-shadow: 0 16px 36px -8px rgba(217,175,108,0.7); }
+
+.btn--ghost{
+  background: var(--glass-fill);
+  border: 1px solid var(--glass-border);
+  color: var(--ink);
+}
+.btn--ghost:hover{ background: var(--glass-fill-strong); border-color: var(--glass-border-strong); }
+
+.btn--danger{
+  background: var(--rose-dim);
+  color: var(--rose);
+  border: 1px solid rgba(251,113,133,0.35);
+}
+.btn--danger:hover{ background: rgba(251,113,133,0.22); }
+
+.btn--sm{ padding: 8px 14px; font-size: 13px; border-radius: 9px; }
+
+/* -------------------------------------------------
+   Inputs
+   ------------------------------------------------- */
+.field{
+  width:100%;
+  background: rgba(255,255,255,0.05);
+  border: 1px solid var(--glass-border);
+  color: var(--ink);
+  font-family: var(--f-mono);
+  font-size: 16px;
+  letter-spacing: .04em;
+  border-radius: 12px;
+  padding: 14px 16px;
+  transition: border-color .18s var(--ease), background .18s var(--ease), box-shadow .18s var(--ease);
+}
+.field::placeholder{ color: var(--ink-faint); font-family: var(--f-body); letter-spacing: normal; }
+.field:focus{
+  outline:none;
+  border-color: var(--gold);
+  background: rgba(255,255,255,0.08);
+  box-shadow: 0 0 0 4px var(--gold-dim);
+}
+label.field-label{
+  display:block;
+  font-size: 12px;
+  color: var(--ink-dim);
+  margin-bottom: 6px;
+  font-weight: 500;
+}
+
+/* -------------------------------------------------
+   Badges
+   ------------------------------------------------- */
+.badge{
+  display:inline-flex;
+  align-items:center;
+  gap:6px;
+  font-size:12px;
+  font-weight:600;
+  padding: 5px 11px;
+  border-radius: 999px;
+  font-family: var(--f-mono);
+}
+.badge--pass{ background: var(--mint-dim); color: var(--mint); border:1px solid rgba(74,222,128,0.3); }
+.badge--warn{ background: var(--amber-dim); color: var(--amber); border:1px solid rgba(251,191,36,0.3); }
+.badge--fail{ background: var(--rose-dim); color: var(--rose); border:1px solid rgba(251,113,133,0.3); }
+
+/* -------------------------------------------------
+   Scrollbar (premium touch)
+   ------------------------------------------------- */
+::-webkit-scrollbar{ width:10px; height:10px; }
+::-webkit-scrollbar-track{ background:transparent; }
+::-webkit-scrollbar-thumb{ background: rgba(255,255,255,0.12); border-radius:10px; }
+::-webkit-scrollbar-thumb:hover{ background: rgba(255,255,255,0.2); }
+
+/* ============================================================
+   Student page (index.html)
+   ============================================================ */
+.student-shell{
+  position:relative;
+  z-index:1;
+  min-height:100vh;
+  display:flex;
+  flex-direction:column;
+  align-items:center;
+  padding: 56px 20px 80px;
+}
+
+.student-hero{
+  text-align:center;
+  max-width: 560px;
+  margin-bottom: 34px;
+}
+.student-hero .headline{ font-size: clamp(28px,4.5vw,40px); margin: 10px 0 8px; }
+.student-hero p{ margin:0; font-size:15px; }
+
+.search-card{
+  width:100%;
+  max-width: 440px;
+  padding: 28px;
+  animation: rise .7s var(--ease) both;
+}
+.search-row{ display:flex; flex-direction:column; gap:14px; }
+.search-row .btn{ width:100%; }
+
+@keyframes rise{
+  from{ opacity:0; transform: translateY(16px); }
+  to{ opacity:1; transform: translateY(0); }
+}
+
+.error-msg{
+  margin-top:12px;
+  font-size:13px;
+  color: var(--rose);
+  display:none;
+  align-items:center;
+  gap:6px;
+}
+.error-msg.show{ display:flex; }
+
+/* -- result panel -- */
+.result-panel{
+  width:100%;
+  max-width: 560px;
+  margin-top: 22px;
+  padding: 30px;
+  display:none;
+  opacity:0;
+  transform: translateY(14px);
+}
+.result-panel.show{
+  display:block;
+  animation: rise .55s var(--ease) forwards;
+}
+
+.result-head{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap: 20px;
+  padding-bottom: 22px;
+  border-bottom: 1px solid var(--glass-border);
+  margin-bottom: 22px;
+}
+.result-name{ font-family: var(--f-display); font-size:20px; font-weight:600; margin:0 0 4px; }
+.result-id{ font-family: var(--f-mono); font-size:13px; color: var(--ink-dim); letter-spacing:.04em; }
+
+/* -- grade dial (signature element) -- */
+.dial-wrap{ position:relative; width:104px; height:104px; flex-shrink:0; }
+.dial-wrap svg{ width:100%; height:100%; transform: rotate(-90deg); }
+.dial-track{ fill:none; stroke: rgba(255,255,255,0.08); stroke-width:8; }
+.dial-fill{
+  fill:none;
+  stroke: var(--gold);
+  stroke-width:8;
+  stroke-linecap:round;
+  stroke-dasharray: 283;
+  stroke-dashoffset: 283;
+  transition: stroke-dashoffset 1.1s var(--ease), stroke 1.1s var(--ease);
+}
+.dial-center{
+  position:absolute; inset:0;
+  display:flex; flex-direction:column; align-items:center; justify-content:center;
+}
+.dial-total{ font-family: var(--f-mono); font-size:22px; font-weight:600; line-height:1; }
+.dial-label{ font-size:10px; color: var(--ink-dim); margin-top:3px; letter-spacing:.05em; }
+
+/* -- score breakdown bars -- */
+.score-row{
+  display:grid;
+  grid-template-columns: 132px 1fr 68px;
+  align-items:center;
+  gap: 14px;
+  padding: 10px 0;
+}
+.score-row + .score-row{ border-top: 1px solid rgba(255,255,255,0.05); }
+.score-row .label{ font-size:13.5px; color: var(--ink); }
+.score-row .track{
+  height:7px;
+  border-radius:99px;
+  background: rgba(255,255,255,0.07);
+  overflow:hidden;
+}
+.score-row .fill{
+  height:100%;
+  border-radius:99px;
+  width:0%;
+  background: linear-gradient(90deg, var(--gold-soft), var(--gold));
+  transition: width 1s var(--ease);
+}
+.score-row .val{
+  font-family: var(--f-mono);
+  font-size:13px;
+  text-align:right;
+  color: var(--ink-dim);
+}
+
+.result-foot{
+  margin-top: 22px;
+  padding-top: 20px;
+  border-top: 1px solid var(--glass-border);
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+}
+.result-foot .total-label{ font-size:13px; color: var(--ink-dim); }
+.result-foot .total-num{ font-family: var(--f-display); font-size: 26px; font-weight:700; }
+
+.footer-note{
+  margin-top: 40px;
+  font-size: 12px;
+  color: var(--ink-faint);
+  text-align:center;
+}
+
+/* ============================================================
+   Admin page (admin.html)
+   ============================================================ */
+.admin-shell{ position:relative; z-index:1; min-height:100vh; padding: 32px 32px 60px; }
+
+.admin-topbar{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  flex-wrap:wrap;
+  gap:16px;
+  padding: 20px 26px;
+  margin-bottom: 24px;
+}
+.admin-title{ display:flex; align-items:center; gap:14px; }
+.admin-title .icon{
+  width:42px; height:42px; border-radius:12px;
+  background: var(--gold-dim); color: var(--gold-soft);
+  display:flex; align-items:center; justify-content:center;
+  font-size:20px;
+}
+.admin-title h1{ font-family: var(--f-display); font-size:19px; margin:0; font-weight:600; }
+.admin-title p{ margin:2px 0 0; font-size:12.5px; color: var(--ink-dim); }
+.admin-actions{ display:flex; gap:10px; flex-wrap:wrap; }
+
+.admin-toolbar{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:16px;
+  flex-wrap:wrap;
+  padding: 16px 20px;
+  margin-bottom: 16px;
+}
+.admin-toolbar .field{ max-width: 300px; padding: 10px 14px; font-size:14px; }
+.admin-stats{ display:flex; gap:22px; }
+.admin-stat{ text-align:right; }
+.admin-stat .n{ font-family: var(--f-mono); font-size:18px; font-weight:600; }
+.admin-stat .l{ font-size:11px; color: var(--ink-dim); }
+
+.table-card{ overflow:hidden; padding:0; }
+.table-scroll{ overflow-x:auto; }
+table.score-table{ width:100%; border-collapse:collapse; min-width: 880px; }
+table.score-table thead th{
+  text-align:left;
+  font-size: 11.5px;
+  letter-spacing:.04em;
+  text-transform:uppercase;
+  color: var(--ink-dim);
+  font-weight:500;
+  padding: 14px 16px;
+  border-bottom: 1px solid var(--glass-border);
+  white-space:nowrap;
+}
+table.score-table td{
+  padding: 13px 16px;
+  font-size: 13.5px;
+  border-bottom: 1px solid rgba(255,255,255,0.045);
+  white-space:nowrap;
+}
+table.score-table tbody tr{ transition: background .15s var(--ease); }
+table.score-table tbody tr:hover{ background: rgba(255,255,255,0.03); }
+table.score-table td.num{ font-family: var(--f-mono); text-align:right; }
+table.score-table td.name-cell .n{ font-weight:500; }
+table.score-table td.name-cell .i{ font-family: var(--f-mono); font-size:11.5px; color: var(--ink-dim); }
+table.score-table td.actions{ text-align:right; }
+.icon-btn{
+  width:30px; height:30px;
+  display:inline-flex; align-items:center; justify-content:center;
+  border-radius:8px;
+  border:1px solid var(--glass-border);
+  background: transparent;
+  color: var(--ink-dim);
+  cursor:pointer;
+  transition: all .15s var(--ease);
+  margin-left:6px;
+}
+.icon-btn:hover{ color: var(--ink); border-color: var(--glass-border-strong); background: var(--glass-fill-strong); }
+.icon-btn.danger:hover{ color: var(--rose); border-color: rgba(251,113,133,0.4); background: var(--rose-dim); }
+
+.empty-row td{ text-align:center; padding: 46px 16px; color: var(--ink-faint); }
+
+/* -- modal -- */
+.modal-overlay{
+  position:fixed; inset:0; z-index:50;
+  background: rgba(6,8,16,0.68);
+  backdrop-filter: blur(4px);
+  display:none;
+  align-items:center;
+  justify-content:center;
+  padding: 24px;
+}
+.modal-overlay.show{ display:flex; }
+.modal{
+  width:100%; max-width: 620px;
+  max-height: 88vh;
+  overflow-y:auto;
+  padding: 30px;
+  animation: rise .35s var(--ease) both;
+}
+.modal-head{ display:flex; align-items:center; justify-content:space-between; margin-bottom:22px; }
+.modal-head h2{ font-family: var(--f-display); font-size:18px; margin:0; font-weight:600; }
+.modal-close{ background:none; border:none; color: var(--ink-dim); cursor:pointer; font-size:20px; line-height:1; padding:4px; }
+.modal-grid{ display:grid; grid-template-columns: 1fr 1fr; gap:16px; }
+.modal-grid .span2{ grid-column: 1 / -1; }
+.modal-hint{ font-size:11px; color: var(--ink-faint); margin-top:5px; }
+.modal-foot{ display:flex; justify-content:flex-end; gap:10px; margin-top: 26px; }
+
+@media (max-width: 560px){
+  .modal-grid{ grid-template-columns: 1fr; }
+}
+
+/* -- upload zone -- */
+.upload-zone{
+  border: 1.5px dashed var(--glass-border-strong);
+  border-radius: var(--radius-md);
+  padding: 34px 20px;
+  text-align:center;
+  cursor:pointer;
+  transition: border-color .18s var(--ease), background .18s var(--ease);
+}
+.upload-zone:hover, .upload-zone.dragover{ border-color: var(--gold); background: var(--gold-dim); }
+.upload-zone .icon{ font-size:26px; color: var(--gold-soft); margin-bottom:8px; }
+.upload-zone .fname{ margin-top:10px; font-family: var(--f-mono); font-size:12.5px; color: var(--ink-dim); }
+
+@media (max-width: 720px){
+  .admin-shell{ padding: 18px 14px 40px; }
+  .admin-topbar, .admin-toolbar{ padding:16px; }
+  .score-row{ grid-template-columns: 100px 1fr 56px; gap:10px; }
+}
+
+/* -------------------------------------------------
+   Utility
+   ------------------------------------------------- */
+.sr-only{
+  position:absolute; width:1px; height:1px; padding:0; margin:-1px;
+  overflow:hidden; clip:rect(0,0,0,0); white-space:nowrap; border:0;
+}
+
+</style>
+</head>
+<body>
+
+<div class="aurora" aria-hidden="true">
+  <div class="aurora__blob aurora__blob--a"></div>
+  <div class="aurora__blob aurora__blob--b"></div>
+  <div class="aurora__blob aurora__blob--c"></div>
+</div>
+
+<main class="admin-shell">
+
+  <header class="admin-topbar glass--flat">
+    <div class="admin-title">
+      <div class="icon">DB</div>
+      <div>
+        <h1>จัดการคะแนนนักเรียน</h1>
+        <p>วิชาโปรแกรมฐานข้อมูล · ธดท.2/2</p>
+      </div>
+    </div>
+    <div class="admin-actions">
+      <button class="btn btn--ghost" id="btn-open-upload">อัปโหลดไฟล์ CSV</button>
+      <button class="btn btn--gold" id="btn-open-add">+ เพิ่มนักเรียน</button>
+    </div>
+  </header>
+
+  <div class="admin-toolbar glass--flat">
+    <input class="field" id="search-input" type="text" placeholder="ค้นหาชื่อหรือรหัสนักเรียน">
+    <div class="admin-stats">
+      <div class="admin-stat">
+        <div class="n" id="stat-count">0</div>
+        <div class="l">นักเรียนทั้งหมด</div>
+      </div>
+      <div class="admin-stat">
+        <div class="n" id="stat-avg">0.0</div>
+        <div class="l">คะแนนเฉลี่ย</div>
+      </div>
+    </div>
+  </div>
+
+  <section class="table-card glass">
+    <div class="table-scroll">
+      <table class="score-table">
+        <thead>
+          <tr>
+            <th>นักเรียน</th>
+            <th style="text-align:right">งาน (30)</th>
+            <th style="text-align:right">ระหว่างเรียน (20)</th>
+            <th style="text-align:right">จิตพิสัย (20)</th>
+            <th style="text-align:right">ปลายภาค (30)</th>
+            <th style="text-align:right">รวม (100)</th>
+            <th style="text-align:right">เกรด</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody id="table-body"></tbody>
+      </table>
+    </div>
+  </section>
+
+</main>
+
+<div class="modal-overlay" id="score-modal-overlay">
+  <div class="modal glass">
+    <div class="modal-head">
+      <h2 id="modal-title">เพิ่มนักเรียน</h2>
+      <button class="modal-close" id="modal-close-btn" aria-label="ปิด">&times;</button>
+    </div>
+    <form id="score-form">
+      <input type="hidden" id="f-editing-id">
+      <div class="modal-grid">
+        <div class="span2">
+          <label class="field-label" for="f-name">ชื่อ-นามสกุล</label>
+          <input class="field" id="f-name" required placeholder="เช่น นายกณวรรธน์ วราพุฒ">
+        </div>
+        <div class="span2">
+          <label class="field-label" for="f-id">รหัสประจำตัวนักเรียน</label>
+          <input class="field" id="f-id" required placeholder="เช่น 68219100001">
+        </div>
+        <div>
+          <label class="field-label" for="f-work">คะแนนเก็บ (งาน)</label>
+          <input class="field" id="f-work" type="number" step="0.01" min="0" max="30" required value="0">
+          <p class="modal-hint">เต็ม 30 คะแนน</p>
+        </div>
+        <div>
+          <label class="field-label" for="f-mid">สอบระหว่างเรียน</label>
+          <input class="field" id="f-mid" type="number" step="0.01" min="0" max="20" required value="0">
+          <p class="modal-hint">เต็ม 20 คะแนน (เฉพาะหลังเรียน)</p>
+        </div>
+        <div>
+          <label class="field-label" for="f-jit">จิตพิสัย</label>
+          <input class="field" id="f-jit" type="number" step="0.01" min="0" max="20" required value="0">
+          <p class="modal-hint">เต็ม 20 คะแนน</p>
+        </div>
+        <div>
+          <label class="field-label" for="f-final">สอบปลายภาค</label>
+          <input class="field" id="f-final" type="number" step="0.01" min="0" max="30" required value="0">
+          <p class="modal-hint">เต็ม 30 คะแนน</p>
+        </div>
+      </div>
+      <div class="modal-foot">
+        <button type="button" class="btn btn--ghost" id="modal-cancel-btn">ยกเลิก</button>
+        <button type="submit" class="btn btn--gold">บันทึกคะแนน</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<div class="modal-overlay" id="upload-modal-overlay">
+  <div class="modal glass" style="max-width:480px;">
+    <div class="modal-head">
+      <h2>อัปโหลดไฟล์ CSV</h2>
+      <button class="modal-close" id="upload-modal-close-btn" aria-label="ปิด">&times;</button>
+    </div>
+    <label class="upload-zone" id="upload-zone" for="csv-file-input">
+      <div class="icon">⇧</div>
+      <p style="margin:0; font-size:14px;">ลากไฟล์มาวาง หรือคลิกเพื่อเลือกไฟล์</p>
+      <p class="modal-hint" style="margin-top:6px;">รองรับไฟล์ .csv เท่านั้น</p>
+      <p class="fname" id="upload-filename"></p>
+    </label>
+    <input type="file" id="csv-file-input" accept=".csv" style="display:none;">
+    <div class="modal-foot">
+      <button type="button" class="btn btn--ghost" id="upload-cancel-btn">ยกเลิก</button>
+      <button type="button" class="btn btn--gold" id="upload-confirm-btn">อัปโหลด</button>
+    </div>
+  </div>
+</div>
+
+<script>
+/* ============================================================
+   ระบบตรวจสอบคะแนนนักเรียน — Admin page logic
+
+   NOTE: ตอนนี้ยังไม่มี backend จริง จึงเก็บข้อมูลไว้ใน MOCK_DATA (in-memory)
+   เมื่อเชื่อมต่อ API แล้ว ให้แทนที่ฟังก์ชัน loadStudents / saveStudent /
+   deleteStudent ด้วยการเรียก GET/POST/DELETE /api/scores จริง
+   ============================================================ */
+
+let students = [
+  { id: "68219100001", name: "นายกณวรรธน์ วราพุฒ", work: 28.64, mid: 12.29, jit: 20, final: 20 },
+  { id: "68219100002", name: "นางสาวกัญญพัชร แซ่ล้อ", work: 28.02, mid: 11.43, jit: 20, final: 18 },
+  { id: "68219100003", name: "นางสาวกัญญ์วรา อักษรสม", work: 24.42, mid: 15.43, jit: 20, final: 15 },
+  { id: "68219100004", name: "นางสาวกัญญาวีร์ อินทกูล", work: 25.9, mid: 13.4, jit: 18, final: 22 },
+];
+
+const MAX = { work: 30, mid: 20, jit: 20, final: 30 };
+
+function round1(n) {
+  return Math.round(n * 10) / 10;
+}
+
+function computeGrade(total) {
+  if (total >= 80) return 4;
+  if (total >= 75) return 3.5;
+  if (total >= 70) return 3;
+  if (total >= 65) return 2.5;
+  if (total >= 60) return 2;
+  if (total >= 55) return 1.5;
+  if (total >= 50) return 1;
+  return 0;
+}
+
+function gradeBadgeClass(grade) {
+  if (grade >= 3) return "badge--pass";
+  if (grade >= 1.5) return "badge--warn";
+  return "badge--fail";
+}
+
+/* -------------------- rendering -------------------- */
+const tbody = document.getElementById("table-body");
+const searchInput = document.getElementById("search-input");
+const statCount = document.getElementById("stat-count");
+const statAvg = document.getElementById("stat-avg");
+
+function renderTable() {
+  const query = searchInput.value.trim().toLowerCase();
+  const filtered = students.filter(
+    (s) => s.name.toLowerCase().includes(query) || s.id.includes(query)
+  );
+
+  tbody.innerHTML = "";
+
+  if (filtered.length === 0) {
+    tbody.innerHTML = `<tr class="empty-row"><td colspan="8">ไม่พบนักเรียนที่ค้นหา</td></tr>`;
+  }
+
+  filtered.forEach((s) => {
+    const total = round1(s.work + s.mid + s.jit + s.final);
+    const grade = computeGrade(total);
+    const tr = document.createElement("tr");
+    tr.innerHTML = `
+      <td class="name-cell">
+        <div class="n">${s.name}</div>
+        <div class="i">${s.id}</div>
+      </td>
+      <td class="num">${round1(s.work)}</td>
+      <td class="num">${round1(s.mid)}</td>
+      <td class="num">${round1(s.jit)}</td>
+      <td class="num">${round1(s.final)}</td>
+      <td class="num" style="color:var(--gold-soft); font-weight:600;">${total}</td>
+      <td class="num"><span class="badge ${gradeBadgeClass(grade)}">${grade}</span></td>
+      <td class="actions">
+        <button class="icon-btn" data-edit="${s.id}" aria-label="แก้ไข">✎</button>
+        <button class="icon-btn danger" data-delete="${s.id}" aria-label="ลบ">🗑</button>
+      </td>
+    `;
+    tbody.appendChild(tr);
+  });
+
+  statCount.textContent = students.length;
+  const avg = students.length
+    ? round1(
+        students.reduce((sum, s) => sum + s.work + s.mid + s.jit + s.final, 0) /
+          students.length
+      )
+    : 0;
+  statAvg.textContent = avg;
+}
+
+/* -------------------- score modal -------------------- */
+const scoreOverlay = document.getElementById("score-modal-overlay");
+const scoreForm = document.getElementById("score-form");
+const modalTitle = document.getElementById("modal-title");
+const editingIdField = document.getElementById("f-editing-id");
+
+function openAddModal() {
+  scoreForm.reset();
+  editingIdField.value = "";
+  modalTitle.textContent = "เพิ่มนักเรียน";
+  document.getElementById("f-id").disabled = false;
+  scoreOverlay.classList.add("show");
+  document.getElementById("f-name").focus();
+}
+
+function openEditModal(id) {
+  const s = students.find((x) => x.id === id);
+  if (!s) return;
+  document.getElementById("f-name").value = s.name;
+  document.getElementById("f-id").value = s.id;
+  document.getElementById("f-id").disabled = true;
+  document.getElementById("f-work").value = s.work;
+  document.getElementById("f-mid").value = s.mid;
+  document.getElementById("f-jit").value = s.jit;
+  document.getElementById("f-final").value = s.final;
+  editingIdField.value = id;
+  modalTitle.textContent = "แก้ไขคะแนน";
+  scoreOverlay.classList.add("show");
+  document.getElementById("f-name").focus();
+}
+
+function closeScoreModal() {
+  scoreOverlay.classList.remove("show");
+}
+
+document.getElementById("btn-open-add").addEventListener("click", openAddModal);
+document.getElementById("modal-close-btn").addEventListener("click", closeScoreModal);
+document.getElementById("modal-cancel-btn").addEventListener("click", closeScoreModal);
+scoreOverlay.addEventListener("click", (e) => {
+  if (e.target === scoreOverlay) closeScoreModal();
+});
+
+scoreForm.addEventListener("submit", (e) => {
+  e.preventDefault();
+
+  const name = document.getElementById("f-name").value.trim();
+  const id = document.getElementById("f-id").value.trim();
+  const work = Math.min(MAX.work, Math.max(0, parseFloat(document.getElementById("f-work").value) || 0));
+  const mid = Math.min(MAX.mid, Math.max(0, parseFloat(document.getElementById("f-mid").value) || 0));
+  const jit = Math.min(MAX.jit, Math.max(0, parseFloat(document.getElementById("f-jit").value) || 0));
+  const final = Math.min(MAX.final, Math.max(0, parseFloat(document.getElementById("f-final").value) || 0));
+
+  if (!name || !id) return;
+
+  const editingId = editingIdField.value;
+  if (editingId) {
+    const s = students.find((x) => x.id === editingId);
+    Object.assign(s, { name, work, mid, jit, final });
+  } else {
+    if (students.some((x) => x.id === id)) {
+      alert("รหัสนักเรียนนี้มีอยู่ในระบบแล้ว");
+      return;
+    }
+    students.push({ id, name, work, mid, jit, final });
+  }
+
+  /* ตัวอย่างเมื่อเชื่อม backend จริง:
+  fetch('/api/scores', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ id, name, work, mid, jit, final }),
+  });
+  */
+
+  closeScoreModal();
+  renderTable();
+});
+
+tbody.addEventListener("click", (e) => {
+  const editId = e.target.closest("[data-edit]")?.dataset.edit;
+  const delId = e.target.closest("[data-delete]")?.dataset.delete;
+
+  if (editId) openEditModal(editId);
+
+  if (delId) {
+    const s = students.find((x) => x.id === delId);
+    if (confirm(`ลบข้อมูลของ ${s?.name} ใช่หรือไม่?`)) {
+      students = students.filter((x) => x.id !== delId);
+      renderTable();
+    }
+  }
+});
+
+searchInput.addEventListener("input", renderTable);
+
+/* -------------------- upload modal -------------------- */
+const uploadOverlay = document.getElementById("upload-modal-overlay");
+const uploadZone = document.getElementById("upload-zone");
+const fileInput = document.getElementById("csv-file-input");
+const uploadFilename = document.getElementById("upload-filename");
+let selectedFile = null;
+
+function openUploadModal() {
+  selectedFile = null;
+  uploadFilename.textContent = "";
+  fileInput.value = "";
+  uploadOverlay.classList.add("show");
+}
+function closeUploadModal() {
+  uploadOverlay.classList.remove("show");
+}
+
+document.getElementById("btn-open-upload").addEventListener("click", openUploadModal);
+document.getElementById("upload-modal-close-btn").addEventListener("click", closeUploadModal);
+document.getElementById("upload-cancel-btn").addEventListener("click", closeUploadModal);
+uploadOverlay.addEventListener("click", (e) => {
+  if (e.target === uploadOverlay) closeUploadModal();
+});
+
+fileInput.addEventListener("change", () => {
+  if (fileInput.files[0]) {
+    selectedFile = fileInput.files[0];
+    uploadFilename.textContent = selectedFile.name;
+  }
+});
+
+["dragover", "dragenter"].forEach((evt) =>
+  uploadZone.addEventListener(evt, (e) => {
+    e.preventDefault();
+    uploadZone.classList.add("dragover");
+  })
+);
+["dragleave", "drop"].forEach((evt) =>
+  uploadZone.addEventListener(evt, (e) => {
+    e.preventDefault();
+    uploadZone.classList.remove("dragover");
+  })
+);
+uploadZone.addEventListener("drop", (e) => {
+  const file = e.dataTransfer.files[0];
+  if (file && file.name.endsWith(".csv")) {
+    selectedFile = file;
+    uploadFilename.textContent = file.name;
+  }
+});
+
+document.getElementById("upload-confirm-btn").addEventListener("click", () => {
+  if (!selectedFile) {
+    alert("กรุณาเลือกไฟล์ CSV ก่อนอัปโหลด");
+    return;
+  }
+
+  /* ตัวอย่างเมื่อเชื่อม backend จริง:
+  const formData = new FormData();
+  formData.append('file', selectedFile);
+  fetch('/api/scores/upload', { method: 'POST', body: formData })
+    .then((res) => res.json())
+    .then(() => loadStudents());
+  */
+
+  alert(`อัปโหลดไฟล์ "${selectedFile.name}" สำเร็จ (ตัวอย่าง — ยังไม่เชื่อมต่อฐานข้อมูลจริง)`);
+  closeUploadModal();
+});
+
+/* -------------------- init -------------------- */
+renderTable();
+
+</script>
+</body>
+</html>
