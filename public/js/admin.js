@@ -238,7 +238,9 @@ function showDetailsModal(id) {
 
 document.getElementById("details-modal-close-btn").addEventListener("click", hideDetailsModal);
 document.getElementById("details-close-btn").addEventListener("click", hideDetailsModal);
-document.getElementById("details-modal-overlay").addEventListener("click", hideDetailsModal);
+document.getElementById("details-modal-overlay").addEventListener("click", (e) => {
+  if (e.target === document.getElementById("details-modal-overlay")) hideDetailsModal();
+});
 
 function hideDetailsModal() {
   document.getElementById("details-modal").classList.remove("show");
@@ -440,8 +442,10 @@ document.getElementById("btn-sync-settings").addEventListener("click", openSyncS
 document.getElementById("btn-sync-now").addEventListener("click", triggerSync);
 document.getElementById("sync-modal-close-btn").addEventListener("click", closeSyncSettings);
 document.getElementById("sync-cancel-btn").addEventListener("click", closeSyncSettings);
-document.getElementById("sync-settings-overlay").addEventListener("click", closeSyncSettings);
-document.getElementById("add-config-btn").addEventListener("click", addConfigRow);
+document.getElementById("sync-settings-overlay").addEventListener("click", (e) => {
+  if (e.target === document.getElementById("sync-settings-overlay")) closeSyncSettings();
+});
+document.getElementById("add-config-btn").addEventListener("click", () => addConfigRow());
 document.getElementById("sync-save-btn").addEventListener("click", saveSyncSettings);
 
 let currentConfigs = [];
