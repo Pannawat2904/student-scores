@@ -450,9 +450,6 @@ document.getElementById("btn-sync-settings").addEventListener("click", openSyncS
 document.getElementById("btn-sync-now").addEventListener("click", triggerSync);
 document.getElementById("sync-modal-close-btn").addEventListener("click", closeSyncSettings);
 document.getElementById("sync-cancel-btn").addEventListener("click", closeSyncSettings);
-document.getElementById("sync-settings-overlay").addEventListener("click", (e) => {
-  if (e.target === document.getElementById("sync-settings-overlay")) closeSyncSettings();
-});
 document.getElementById("add-config-btn").addEventListener("click", () => addConfigRow());
 document.getElementById("sync-save-btn").addEventListener("click", saveSyncSettings);
 
@@ -463,7 +460,7 @@ async function openSyncSettings() {
   document.getElementById("sync-settings-overlay").classList.add("show");
   
   try {
-    const res = await fetch("/api/config", { credentials: "same-origin" });
+    const res = await fetch("/api/config", { credentials: "include" });
     currentConfigs = await res.json();
     renderConfigs();
   } catch (err) {
@@ -531,15 +528,23 @@ async function saveSyncSettings() {
     const res = await fetch("/api/config", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      credentials: "same-origin",
+      credentials: "include",
       body: JSON.stringify(newConfigs)
     });
+    
+    if (res.status === 401) {
+      alert("หมดเวลาเซสชั่น กรุณาเข้าสู่ระบบใหม่");
+      window.location.href = "/login.html";
+      return;
+    }
+    
     if (res.ok) {
-      alert("บันทึกการตั้งค่าแล้ว");
+      alert("✅ บันทึกการตั้งค่าแล้ว");
       closeSyncSettings();
     } else {
-      const data = await res.json();
-      throw new Error(data.error || "Save failed");
+      let msg = "บันทึกไม่สำเร็จ";
+      try { const d = await res.json(); msg = d.error || msg; } catch(e) {}
+      throw new Error(msg);
     }
   } catch (err) {
     alert("เกิดข้อผิดพลาด: " + err.message);
@@ -558,7 +563,7 @@ async function triggerSync() {
   try {
     const res = await fetch("/api/scores/sync", { 
       method: "POST",
-      credentials: "same-origin" 
+      credentials: "include" 
     });
     const data = await res.json();
     if (!res.ok) throw new Error(data.error || "Sync failed");

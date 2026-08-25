@@ -60,19 +60,15 @@ app.post('/api/login', (req, res) => {
 
   if (username === adminUser && password === adminPass) {
     const token = Buffer.from(`${username}:${password}`).toString('base64');
-    // Set cookie, valid for 7 days
-    res.cookie('admin_token', token, { maxAge: 7 * 24 * 60 * 60 * 1000, httpOnly: true, secure: true, sameSite: 'strict' });
-    // Note: express res.cookie needs cookie-parser usually, but since Vercel env handles basic Express routing we can just use Set-Cookie header to be safe without importing anything
-    res.setHeader('Set-Cookie', `admin_token=${token}; Max-Age=${7 * 24 * 60 * 60}; HttpOnly; Secure; SameSite=Strict; Path=/`);
+    res.setHeader('Set-Cookie', `admin_token=${token}; Max-Age=${7 * 24 * 60 * 60}; HttpOnly; SameSite=Lax; Path=/`);
     res.json({ success: true });
   } else {
     res.status(401).json({ error: 'Invalid credentials' });
   }
 });
 
-// API: Logout
 app.post('/api/logout', (req, res) => {
-  res.setHeader('Set-Cookie', `admin_token=; Max-Age=0; HttpOnly; Secure; SameSite=Strict; Path=/`);
+  res.setHeader('Set-Cookie', `admin_token=; Max-Age=0; HttpOnly; SameSite=Lax; Path=/`);
   res.json({ success: true });
 });
 
