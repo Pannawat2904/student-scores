@@ -16,11 +16,10 @@ const { createClient } = require('@supabase/supabase-js');
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// Supabase setup — use hardcoded values as primary, env vars only if explicitly correct
-const SUPABASE_URL_DEFAULT = 'https://ttgjkcnrujczzhsboatm.supabase.co';
-const SUPABASE_KEY_DEFAULT = 'sb_publishable_2j3oXeUH5s_em-r2JuMj0g_I3tGVkmJ';
-const supabaseUrl = (process.env.SUPABASE_URL && process.env.SUPABASE_URL.includes('supabase.co') && !process.env.SUPABASE_URL.includes('your-project')) ? process.env.SUPABASE_URL : SUPABASE_URL_DEFAULT;
-const supabaseKey = (process.env.SUPABASE_KEY && process.env.SUPABASE_KEY.length > 20) ? process.env.SUPABASE_KEY : SUPABASE_KEY_DEFAULT;
+// Supabase setup — always use known-correct values
+// NOTE: env var SUPABASE_URL was incorrectly set to .com instead of .co on Vercel
+const supabaseUrl = 'https://ttgjkcnrujczzhsboatm.supabase.co';
+const supabaseKey = 'sb_publishable_2j3oXeUH5s_em-r2JuMj0g_I3tGVkmJ';
 const supabase = createClient(supabaseUrl, supabaseKey);
 
 app.use(cors());
