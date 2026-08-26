@@ -108,9 +108,12 @@ app.post('/api/logout', (req, res) => {
   res.json({ success: true });
 });
 
-// Protect admin.html BEFORE static middleware
+// Protect admin pages BEFORE static middleware
 app.get('/admin.html', cookieAuth, (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'admin.html'));
+});
+app.get('/history.html', cookieAuth, (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'history.html'));
 });
 
 app.use(express.static('public'));

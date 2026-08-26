@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ประวัติการเข้าสู่ระบบ — ระบบจัดการ</title>
+<link rel="stylesheet" href="css/style.css?v=18">
+</head>
+<body>
+
+<div class="aurora" aria-hidden="true">
+  <div class="aurora__blob aurora__blob--a"></div>
+  <div class="aurora__blob aurora__blob--b"></div>
+  <div class="aurora__blob aurora__blob--c"></div>
+</div>
+
+<main class="admin-shell">
+
+  <header class="admin-topbar glass--flat">
+    <div class="admin-title">
+      <div class="icon">🕒</div>
+      <div>
+        <h1>ประวัติการเข้าสู่ระบบ</h1>
+        <p>แสดงประวัติการตรวจสอบคะแนนของนักเรียน</p>
+      </div>
+    </div>
+    <div class="admin-actions">
+      <a href="admin.html" class="btn btn--ghost">⬅️ กลับไปจัดการคะแนน</a>
+      <button class="btn btn--ghost" id="history-clear-btn" style="color: var(--rose); border-color: rgba(239,68,68,0.3);">ล้างประวัติทั้งหมด</button>
+      <button class="btn btn--ghost" id="btn-logout" style="color: var(--rose); margin-left: 10px; border-color: rgba(239,68,68,0.3);">🚪 ออกจากระบบ</button>
+    </div>
+  </header>
+
+  <section class="table-card glass">
+    <div class="table-scroll" style="max-height: calc(100vh - 200px); overflow-y: auto;">
+      <table class="score-table">
+        <thead>
+          <tr>
+            <th>เวลา</th>
+            <th>รหัสประจำตัว</th>
+            <th>ชื่อ-นามสกุล</th>
+            <th>วิชา</th>
+          </tr>
+        </thead>
+        <tbody id="history-table-body">
+          <tr><td colspan="4" style="text-align:center;">กำลังโหลด...</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+</main>
+
+<script>
+  // Check auth
+  const parseCookies = () => {
+    return document.cookie.split(';').reduce((acc, cookie) => {
+      const [name, value] = cookie.split('=').map(c => c.trim());
+      if (name && value) acc[name] = value;
+      return acc;
+    }, {});
+  };
+
+  const cookies = parseCookies();
+  if (!cookies['admin_token']) {
+    window.location.href = '/login.html';
+  }
+
+  // Logout
+  document.getElementById("btn-logout").addEventListener("click", () => {
+    fetch('/api/logout', { method: 'POST', credentials: 'same-origin' })
+    .then(() => {
+      window.location.href = '/login.html';
+    }).catch(() => {
+      window.location.href = '/login.html';
+    });
+  });
+
+  // Load history
+  const historyTableBody = document.getElementById("history-table-body");
+
+  async function loadHistory() {
+    historyTableBody.innerHTML = `<tr><td colspan="4" style="text-align:center;">กำลังโหลด...</td></tr>`;
+    try {
+      const res = await fetch('/api/history/login', { credentials: 'include' });
+      if (res.status === 401) {
+         window.location.href = '/login.html';
+         return;
+      }
+      if (res.ok) {
+        const data = await res.json();
+        if (data.length === 0) {
+          historyTableBody.innerHTML = `<tr><td colspan="4" style="text-align:center; opacity:0.6;">ไม่มีประวัติการเข้าสู่ระบบ</td></tr>`;
+          return;
+        }
+        historyTableBody.innerHTML = data.map(log => {
+          const time = new Date(log.login_time).toLocaleString('th-TH');
+          return `
+            <tr>
+              <td style="color:var(--ink-dim);">${time}</td>
+              <td style="font-family:monospace;">${log.student_id}</td>
+              <td>${log.student_name}</td>
+              <td>${log.subject || '-'}</td>
+            </tr>
+          `;
+        }).join('');
+      } else {
+        historyTableBody.innerHTML = `<tr><td colspan="4" style="text-align:center; color:var(--rose);">ดึงข้อมูลไม่สำเร็จ</td></tr>`;
+      }
+    } catch (err) {
+      historyTableBody.innerHTML = `<tr><td colspan="4" style="text-align:center; color:var(--rose);">เกิดข้อผิดพลาด</td></tr>`;
+    }
+  }
+
+  // Clear history
+  document.getElementById("history-clear-btn").addEventListener("click", async () => {
+    if (confirm("คุณต้องการล้างประวัติการเข้าสู่ระบบทั้งหมดใช่หรือไม่?")) {
+      try {
+        const res = await fetch('/api/history/login', { method: 'DELETE', credentials: 'include' });
+        if (res.ok) {
+          alert("ล้างประวัติสำเร็จ");
+          loadHistory();
+        } else {
+          alert("ล้างประวัติไม่สำเร็จ");
+        }
+      } catch (err) {
+        alert("เกิดข้อผิดพลาด: " + err.message);
+      }
+    }
+  });
+
+  // Init
+  loadHistory();
+</script>
+
+</body>
+</html>

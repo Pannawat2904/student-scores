@@ -27,7 +27,7 @@
     <div class="admin-actions">
       <button class="btn btn--ghost" id="btn-sync-settings" style="padding: 0 10px;">⚙️ ตั้งค่า Auto-Sync</button>
       <button class="btn btn--ghost" id="btn-sync-now" style="color: var(--mint); border-color: rgba(16,185,129,0.3); padding: 0 10px;">⟳ อัปเดตเดี๋ยวนี้</button>
-      <button class="btn btn--ghost" id="btn-open-history" style="padding: 0 10px;">🕒 ประวัติเข้าสู่ระบบ</button>
+      <a href="history.html" class="btn btn--ghost" style="padding: 0 10px; display: inline-flex; align-items: center; justify-content: center; text-decoration: none;">🕒 ประวัติเข้าสู่ระบบ</a>
       <button class="btn btn--ghost" id="btn-open-upload">อัปโหลดไฟล์ CSV</button>
       <button class="btn btn--gold" id="btn-open-add">+ เพิ่มนักเรียน</button>
       <button class="btn btn--ghost" id="btn-logout" style="color: var(--rose); margin-left: 10px; border-color: rgba(239,68,68,0.3);">🚪 ออกจากระบบ</button>
@@ -204,36 +204,7 @@
     </div>
   </div>
 
-  <!-- Login History Modal -->
-  <div class="modal-overlay" id="history-modal-overlay">
-    <div class="modal glass" id="history-modal" role="dialog" aria-modal="true" style="max-width: 600px;">
-      <div class="modal-head">
-        <h2>ประวัติการเข้าสู่ระบบ</h2>
-        <button class="modal-close" id="history-modal-close-btn" aria-label="ปิด">&times;</button>
-      </div>
-      <div class="modal-body">
-        <div class="table-scroll" style="max-height: 400px; overflow-y: auto;">
-          <table class="score-table">
-            <thead>
-              <tr>
-                <th>เวลา</th>
-                <th>รหัสประจำตัว</th>
-                <th>ชื่อ-นามสกุล</th>
-                <th>วิชา</th>
-              </tr>
-            </thead>
-            <tbody id="history-table-body">
-              <!-- JS will populate this -->
-            </tbody>
-          </table>
-        </div>
-      </div>
-      <div class="modal-foot" style="justify-content: space-between;">
-        <button type="button" class="btn btn--ghost" id="history-clear-btn" style="color: var(--rose); border-color: rgba(239,68,68,0.3);">ล้างประวัติทั้งหมด</button>
-        <button type="button" class="btn btn--ghost" id="history-close-btn">ปิด</button>
-      </div>
-    </div>
-  </div>
+
 
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <script src="js/admin.js?v=12"></script>
