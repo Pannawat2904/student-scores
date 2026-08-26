@@ -138,7 +138,17 @@ app.get('/api/scores/:id', async (req, res) => {
   if (error) return res.status(500).json({ error: error.message });
   
   if (data && data.length > 0) {
-    res.json(data[0]); // Return the first match if multiple
+    const student = data[0];
+    // Log access to login_history
+    supabase.from('login_history').insert({
+      student_id: student.id,
+      student_name: student.name,
+      subject: student.subject
+    }).then(({ error }) => {
+      if (error) console.error("Error logging history:", error.message);
+    });
+
+    res.json(student); // Return the first match if multiple
   } else {
     res.status(404).json({ error: 'Student not found' });
   }
@@ -170,6 +180,20 @@ app.delete('/api/scores/:id', cookieAuth, async (req, res) => {
   const { error } = await supabase.from('scores').delete().eq('id', req.params.id);
   if (error) return res.status(500).json({ error: error.message });
   res.json({ success: true, message: 'Score deleted' });
+});
+
+// GET /api/history/login - Get login history
+app.get('/api/history/login', cookieAuth, async (req, res) => {
+  const { data, error } = await supabase.from('login_history').select('*').order('login_time', { ascending: false }).limit(100);
+  if (error) return res.status(500).json({ error: error.message });
+  res.json(data);
+});
+
+// DELETE /api/history/login - Clear login history
+app.delete('/api/history/login', cookieAuth, async (req, res) => {
+  const { error } = await supabase.from('login_history').delete().neq('id', '00000000-0000-0000-0000-000000000000'); // Delete all
+  if (error) return res.status(500).json({ error: error.message });
+  res.json({ success: true, message: 'Login history cleared' });
 });
 
 // GET /api/config - Get sync configurations
