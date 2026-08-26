@@ -52,19 +52,7 @@
 </main>
 
 <script>
-  // Check auth
-  const parseCookies = () => {
-    return document.cookie.split(';').reduce((acc, cookie) => {
-      const [name, value] = cookie.split('=').map(c => c.trim());
-      if (name && value) acc[name] = value;
-      return acc;
-    }, {});
-  };
 
-  const cookies = parseCookies();
-  if (!cookies['admin_token']) {
-    window.location.href = '/login.html';
-  }
 
   // Logout
   document.getElementById("btn-logout").addEventListener("click", () => {

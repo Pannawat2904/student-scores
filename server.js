@@ -80,7 +80,7 @@ const cookieAuth = (req, res, next) => {
   }
 
   // If asking for an HTML page, redirect to login
-  if (req.path === '/admin.html') {
+  if (req.path === '/admin.html' || req.path === '/history.html') {
     return res.redirect('/login.html');
   }
   
