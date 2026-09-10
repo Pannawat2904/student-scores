@@ -7,12 +7,31 @@
    ============================================================ */
 
 let students = [];
+let studentRollMap = new Map();
+
+function updateStudentRollNumbers() {
+  studentRollMap.clear();
+  const bySubject = {};
+  students.forEach(s => {
+    const sub = s.subject || 'unknown';
+    if (!bySubject[sub]) bySubject[sub] = [];
+    bySubject[sub].push(s);
+  });
+
+  Object.values(bySubject).forEach(list => {
+    list.sort((a, b) => (a.id || '').localeCompare(b.id || '', undefined, { numeric: true }));
+    list.forEach((s, idx) => {
+      studentRollMap.set(`${s.subject || ''}__${s.id}`, idx + 1);
+    });
+  });
+}
 
 async function loadStudents() {
   try {
     const res = await fetch('/api/scores');
     if (res.ok) {
       students = await res.json();
+      updateStudentRollNumbers();
       populateSubjectFilter();
       try {
         renderTable();
@@ -83,6 +102,17 @@ function renderTable() {
     return matchSearch && matchSubject;
   });
 
+  // Sort students by subject, then by roll number (เลขที่) / ID
+  filtered.sort((a, b) => {
+    if (a.subject !== b.subject) {
+      return (a.subject || '').localeCompare(b.subject || '', 'th');
+    }
+    const rollA = studentRollMap.get(`${a.subject || ''}__${a.id}`) || 0;
+    const rollB = studentRollMap.get(`${b.subject || ''}__${b.id}`) || 0;
+    if (rollA !== rollB) return rollA - rollB;
+    return (a.id || '').localeCompare(b.id || '', undefined, { numeric: true });
+  });
+
   tbody.innerHTML = "";
 
   if (filtered.length === 0) {
@@ -91,9 +121,10 @@ function renderTable() {
 
   filtered.forEach((s) => {
     const total = round1(s.work + s.mid + s.jit + s.final);
-    const grade = computeGrade(total);
+    const rollNo = studentRollMap.get(`${s.subject || ''}__${s.id}`) || '-';
     const tr = document.createElement("tr");
     tr.innerHTML = `
+      <td style="text-align:center; font-family:var(--f-mono); font-size:13px; font-weight:600; color:var(--ink-dim);">${rollNo}</td>
       <td class="name-cell">
         <div class="n">${s.name}</div>
         <div class="i">${s.id}</div>
@@ -103,9 +134,8 @@ function renderTable() {
       <td class="num">${round1(s.jit)}</td>
       <td class="num">${round1(s.final)}</td>
       <td class="num" style="color:var(--gold-soft); font-weight:600;">${total}</td>
-      <td class="num"><span class="badge ${gradeBadgeClass(grade)}">${grade}</span></td>
       <td class="actions">
-        <button class="icon-btn" title="ดูรายละเอียด" onclick="showDetailsModal('${s.id}')">
+        <button class="icon-btn" title="ดูรายละเอียด" onclick="showDetailsModal('${s.id}', '${(s.subject || '').replace(/'/g, "\\'")}')">
           <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path><path stroke-linecap="round" stroke-linejoin="round" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"></path></svg>
         </button>
         <button class="icon-btn danger" title="ลบข้อมูล" onclick="deleteStudent('${s.id}')">🗑</button>
@@ -175,12 +205,13 @@ function updateChart(filteredStudents) {
   }
 }
 
-function showDetailsModal(id) {
-  const student = students.find(s => s.id === id);
+function showDetailsModal(id, subject) {
+  const student = students.find(s => s.id === id && (!subject || s.subject === subject)) || students.find(s => s.id === id);
   if (!student) return;
 
+  const rollNo = studentRollMap.get(`${student.subject || ''}__${student.id}`);
   document.getElementById("details-student-name").textContent = student.name;
-  document.getElementById("details-student-id").textContent = `รหัสประจำตัว: ${student.id} | ${student.subject}`;
+  document.getElementById("details-student-id").textContent = `${rollNo ? `เลขที่: ${rollNo} | ` : ''}รหัสประจำตัว: ${student.id} | ${student.subject}`;
 
   const container = document.getElementById("details-assignments-container");
   if (!student.assignments || student.assignments.length === 0) {

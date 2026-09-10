@@ -124,7 +124,7 @@ const upload = multer({ storage: storage });
 
 // GET /api/scores - Get all scores
 app.get('/api/scores', async (req, res) => {
-  const { data, error } = await supabase.from('scores').select('*');
+  const { data, error } = await supabase.from('scores').select('*').order('id', { ascending: true });
   if (error) return res.status(500).json({ error: error.message });
   res.json(data);
 });
