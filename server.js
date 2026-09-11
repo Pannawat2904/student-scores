@@ -124,14 +124,44 @@ const upload = multer({ storage: storage });
 
 // GET /api/scores - Get all scores
 app.get('/api/scores', async (req, res) => {
+  // Auto-sync if data is older than interval
+  try {
+    await checkAndAutoSync(null);
+  } catch (e) {
+    console.warn('[Auto-Sync] Error during scores fetch:', e.message);
+  }
+
   const { data, error } = await supabase.from('scores').select('*').order('id', { ascending: true });
   if (error) return res.status(500).json({ error: error.message });
   res.json(data);
 });
 
+// GET /api/scores/sync-status - Check current sync status and latest update times
+app.get('/api/scores/sync-status', async (req, res) => {
+  const { data } = await supabase
+    .from('scores')
+    .select('subject, updated_at')
+    .order('updated_at', { ascending: false })
+    .limit(10);
+
+  res.json({
+    interval_minutes: AUTO_SYNC_INTERVAL_MINUTES,
+    last_global_sync: lastGlobalSyncTime ? new Date(lastGlobalSyncTime).toISOString() : null,
+    recent_db_updates: data
+  });
+});
+
 // GET /api/scores/:id - Get a single student's score
 app.get('/api/scores/:id', async (req, res) => {
   const subject = req.query.subject;
+
+  // Smart Auto-Sync: automatically sync if data is older than interval (e.g. 5 mins)
+  try {
+    await checkAndAutoSync(subject || null);
+  } catch (e) {
+    console.warn('[Auto-Sync] Error during student score lookup:', e.message);
+  }
+
   let query = supabase.from('scores').select('*').eq('id', req.params.id);
   if (subject) {
     query = query.eq('subject', subject);
@@ -372,7 +402,8 @@ function processCSVContent(content, subject) {
       };
     });
 
-    parsedStudents.push({ id, name, subject, work, mid, jit, final, total, assignments });
+    const nowIso = new Date().toISOString();
+    parsedStudents.push({ id, name, subject, work, mid, jit, final, total, assignments, updated_at: nowIso });
   }
   return parsedStudents;
 }
@@ -398,43 +429,172 @@ app.post('/api/scores/upload', cookieAuth, upload.single('file'), async (req, re
   }
 });
 
-// POST /api/scores/sync - Trigger sync from all configured Google Sheets
-app.post('/api/scores/sync', cookieAuth, async (req, res) => {
-  const { data: configs, error: configError } = await supabase.from('configs').select('*');
-  if (configError) return res.status(500).json({ error: configError.message });
-  if (!configs || configs.length === 0) {
-    return res.status(400).json({ error: 'No sync configurations found' });
-  }
+// ==========================================
+// Auto-Sync Logic & Helpers
+// ==========================================
+const AUTO_SYNC_INTERVAL_MINUTES = parseInt(process.env.AUTO_SYNC_INTERVAL_MINUTES, 10) || 5;
+const AUTO_SYNC_INTERVAL_MS = AUTO_SYNC_INTERVAL_MINUTES * 60 * 1000;
 
+const lastSyncBySubject = new Map(); // subject -> timestamp (ms)
+let lastGlobalSyncTime = 0;
+const inFlightSyncs = new Map(); // key -> Promise
+
+// Sync a single subject configuration
+async function syncSingleSubject(conf) {
+  if (!conf || !conf.url || !conf.subject) return 0;
+  const response = await fetch(conf.url);
+  if (!response.ok) throw new Error(`Failed to fetch ${conf.subject}: ${response.statusText}`);
+  const content = await response.text();
+  const parsedStudents = processCSVContent(content, conf.subject);
+  if (parsedStudents.length > 0) {
+    const { error: upsertError } = await supabase.from('scores').upsert(parsedStudents, { onConflict: 'id, subject' });
+    if (upsertError) throw upsertError;
+  }
+  const now = Date.now();
+  lastSyncBySubject.set(conf.subject, now);
+  lastGlobalSyncTime = now;
+  return parsedStudents.length;
+}
+
+// Sync all configured subjects in parallel
+async function syncAllSubjects() {
+  const { data: configs, error: configError } = await supabase.from('configs').select('*');
+  if (configError) throw configError;
+  if (!configs || configs.length === 0) return { count: 0, errors: [] };
+
+  const results = await Promise.allSettled(configs.map(conf => syncSingleSubject(conf)));
   let totalProcessed = 0;
   const errors = [];
 
-  for (const conf of configs) {
-    try {
-      if (!conf.url || !conf.subject) continue;
-      const response = await fetch(conf.url);
-      if (!response.ok) throw new Error(`Failed to fetch: ${response.statusText}`);
-      
-      const content = await response.text();
-      const parsedStudents = processCSVContent(content, conf.subject);
-      
-      if (parsedStudents.length > 0) {
-        const { error: upsertError } = await supabase.from('scores').upsert(parsedStudents, { onConflict: 'id, subject' });
-        if (upsertError) throw upsertError;
-        totalProcessed += parsedStudents.length;
-      }
-    } catch (err) {
-      errors.push(`วิชา ${conf.subject}: ${err.message}`);
+  results.forEach((res, index) => {
+    if (res.status === 'fulfilled') {
+      totalProcessed += res.value;
+    } else {
+      errors.push(`วิชา ${configs[index].subject}: ${res.reason?.message || res.reason}`);
     }
+  });
+
+  lastGlobalSyncTime = Date.now();
+  return { count: totalProcessed, errors };
+}
+
+// Smart Auto-Sync: Checks freshness (TTL) and triggers sync if stale
+async function checkAndAutoSync(subject = null, force = false) {
+  const syncKey = subject || '__ALL__';
+
+  // Deduplication: Return ongoing promise if sync is already in flight
+  if (inFlightSyncs.has(syncKey)) {
+    return inFlightSyncs.get(syncKey);
   }
 
-  if (errors.length > 0 && totalProcessed === 0) {
-    res.status(500).json({ error: errors.join(', ') });
-  } else {
-    res.json({ success: true, count: totalProcessed, message: 'Synced successfully' });
+  const promise = (async () => {
+    const now = Date.now();
+
+    try {
+      if (subject) {
+        // 1. Check in-memory timestamp
+        const memTime = lastSyncBySubject.get(subject) || 0;
+        if (!force && (now - memTime < AUTO_SYNC_INTERVAL_MS)) {
+          return { synced: false, reason: 'fresh_in_memory' };
+        }
+
+        // 2. Check Supabase scores updated_at
+        if (!force) {
+          const { data } = await supabase
+            .from('scores')
+            .select('updated_at')
+            .eq('subject', subject)
+            .order('updated_at', { ascending: false })
+            .limit(1);
+
+          if (data && data.length > 0 && data[0].updated_at) {
+            const dbTime = new Date(data[0].updated_at).getTime();
+            if (now - dbTime < AUTO_SYNC_INTERVAL_MS) {
+              lastSyncBySubject.set(subject, dbTime);
+              return { synced: false, reason: 'fresh_in_db' };
+            }
+          }
+        }
+
+        // 3. Needs sync: fetch config for this subject
+        const { data: conf, error: confError } = await supabase
+          .from('configs')
+          .select('*')
+          .eq('subject', subject)
+          .maybeSingle();
+
+        if (confError || !conf || !conf.url) {
+          return { synced: false, reason: 'no_config' };
+        }
+
+        console.log(`[Auto-Sync] Syncing subject: ${subject}...`);
+        const count = await syncSingleSubject(conf);
+        console.log(`[Auto-Sync] Successfully synced ${subject} (${count} records)`);
+        return { synced: true, count };
+      } else {
+        // Global sync
+        if (!force && (now - lastGlobalSyncTime < AUTO_SYNC_INTERVAL_MS)) {
+          return { synced: false, reason: 'fresh_in_memory' };
+        }
+
+        if (!force) {
+          const { data } = await supabase
+            .from('scores')
+            .select('updated_at')
+            .order('updated_at', { ascending: false })
+            .limit(1);
+
+          if (data && data.length > 0 && data[0].updated_at) {
+            const dbTime = new Date(data[0].updated_at).getTime();
+            if (now - dbTime < AUTO_SYNC_INTERVAL_MS) {
+              lastGlobalSyncTime = dbTime;
+              return { synced: false, reason: 'fresh_in_db' };
+            }
+          }
+        }
+
+        console.log('[Auto-Sync] Syncing all subjects...');
+        const res = await syncAllSubjects();
+        console.log(`[Auto-Sync] Synced all subjects: ${res.count} records, ${res.errors.length} errors`);
+        return { synced: true, ...res };
+      }
+    } catch (err) {
+      console.warn(`[Auto-Sync] Warning: Failed to sync (${syncKey}):`, err.message);
+      return { synced: false, error: err.message };
+    } finally {
+      inFlightSyncs.delete(syncKey);
+    }
+  })();
+
+  inFlightSyncs.set(syncKey, promise);
+  return promise;
+}
+
+
+// POST /api/scores/sync - Manual force sync from all configured Google Sheets
+app.post('/api/scores/sync', cookieAuth, async (req, res) => {
+  try {
+    const result = await syncAllSubjects();
+    if (result.errors.length > 0 && result.count === 0) {
+      res.status(500).json({ error: result.errors.join(', ') });
+    } else {
+      res.json({ success: true, count: result.count, errors: result.errors, message: 'Synced successfully' });
+    }
+  } catch (err) {
+    res.status(500).json({ error: err.message });
   }
 });
 
+// Background periodic sync for continuous Node servers (e.g. local dev, VPS, etc.)
+setInterval(async () => {
+  try {
+    await checkAndAutoSync(null);
+  } catch (err) {
+    console.warn('[Auto-Sync] Background interval sync warning:', err.message);
+  }
+}, AUTO_SYNC_INTERVAL_MS);
+
 app.listen(PORT, () => {
   console.log(`Server is running on http://localhost:${PORT}`);
+  console.log(`[Auto-Sync] Enabled with ${AUTO_SYNC_INTERVAL_MINUTES} minute interval.`);
 });
