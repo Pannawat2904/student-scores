@@ -80,7 +80,7 @@ function round1(n) {
 }
 
 function renderResult(id, data) {
-  const total = data.total !== undefined ? round1(data.total) : round1((data.work||0) + (data.mid||0) + (data.jit||0) + (data.final||0));
+  const total = round1((data.work||0) + (data.mid||0) + (data.jit||0) + (data.final||0));
   const grade = computeGrade(total);
   const gc = gradeClass(grade);
 
