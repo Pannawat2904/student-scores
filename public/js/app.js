@@ -97,9 +97,11 @@ function renderResult(id, data) {
   document.getElementById("hero-code").textContent = `รหัสประจำตัว ${id}`;
 
   const dialGrade = document.getElementById("dial-grade");
-  dialGrade.textContent = `เกรด ${grade}`;
-  dialGrade.style.background = gc.bg;
-  dialGrade.style.color = gc.fg;
+  if (dialGrade) {
+    dialGrade.textContent = `เกรด ${grade}`;
+    dialGrade.style.background = gc.bg;
+    dialGrade.style.color = gc.fg;
+  }
 
   document.getElementById("dial-total").textContent = total;
   const circumference = 283;
@@ -129,9 +131,11 @@ function renderResult(id, data) {
 
   document.getElementById("sum-total").textContent = total;
   const sumGrade = document.getElementById("sum-grade");
-  sumGrade.textContent = `เกรด ${grade}`;
-  sumGrade.style.background = gc.bg;
-  sumGrade.style.color = gc.fg;
+  if (sumGrade) {
+    sumGrade.textContent = `เกรด ${grade}`;
+    sumGrade.style.background = gc.bg;
+    sumGrade.style.color = gc.fg;
+  }
 
   // Individual assignments & quizzes.  A blank cell in the source sheet is
   // intentionally shown as "ยังไม่มีคะแนน" so students can follow up on work
