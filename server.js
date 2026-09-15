@@ -434,7 +434,7 @@ app.post('/api/scores/upload', cookieAuth, upload.single('file'), async (req, re
 // ==========================================
 // Auto-Sync Logic & Helpers
 // ==========================================
-const AUTO_SYNC_INTERVAL_MINUTES = parseInt(process.env.AUTO_SYNC_INTERVAL_MINUTES, 10) || 5;
+const AUTO_SYNC_INTERVAL_MINUTES = parseInt(process.env.AUTO_SYNC_INTERVAL_MINUTES, 10) || 0;
 const AUTO_SYNC_INTERVAL_MS = AUTO_SYNC_INTERVAL_MINUTES * 60 * 1000;
 
 const lastSyncBySubject = new Map(); // subject -> timestamp (ms)
