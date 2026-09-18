@@ -353,7 +353,10 @@ function processCSVContent(content, subject) {
   // These are summary/administrative fields, not work that a student needs to
   // submit.  Some exports repeat a label in a different header row, so filter
   // by name as well as by its detected summary column.
-  const isSummaryOrNote = (name) => /คะแนนเก็บ|คะแนนระหว่างเรียน|คะแนนรวม|รวมคะแนน|จิตพิสัย|ปลายภาค|เกรด|หมายเหตุ|^รวม(?:\s|$)/.test(name);
+  const isSummaryOrNote = (name) => {
+    if (/ข้อกา|ข้อเขียน|ปรนัย|อัตนัย/.test(name)) return false;
+    return /คะแนนเก็บ|คะแนนระหว่างเรียน|คะแนนรวม|รวมคะแนน|จิตพิสัย|ปลายภาค|เกรด|หมายเหตุ|^รวม(?:\s|$)/.test(name);
+  };
   const assignmentColumns = columnHeaders
     .map((name, index) => ({ name, index }))
     // Columns 0–4 contain row number and student details in the supported export.

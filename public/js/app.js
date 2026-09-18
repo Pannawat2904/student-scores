@@ -143,13 +143,21 @@ function renderResult(id, data) {
   const unitGrid = document.getElementById("unit-grid");
   const itemGrid = document.getElementById("item-grid");
   const assignments = Array.isArray(data.assignments) ? data.assignments : [];
-  const isSummaryOrNote = (name) => /คะแนนเก็บ|คะแนนระหว่างเรียน|คะแนนรวม|รวมคะแนน|จิตพิสัย|ปลายภาค|เกรด|หมายเหตุ|^รวม(?:\s|$)/.test(name || '');
-  const isTest = (item) => item.type === 'test' || /ทดสอบ|แบบสอบ|ข้อสอบ|สอบย่อย|quiz|(?:^|—\s*)(?:ก่อน|หลัง)\s*\d+\s*(?:ข้อ|คะแนน)?/i.test(item.name || '');
+  const isSummaryOrNote = (name) => {
+    if (/ข้อกา|ข้อเขียน|ปรนัย|อัตนัย/.test(name)) return false;
+    return /คะแนนเก็บ|คะแนนระหว่างเรียน|คะแนนรวม|รวมคะแนน|จิตพิสัย|ปลายภาค|เกรด|หมายเหตุ|^รวม(?:\s|$)/.test(name || '');
+  };
+  const isFinalPart = (item) => /ข้อกา|ข้อเขียน|ปรนัย|อัตนัย/i.test(item.name || '');
+  const isTest = (item) => !isFinalPart(item) && (item.type === 'test' || /ทดสอบ|แบบสอบ|ข้อสอบ|สอบย่อย|quiz|(?:^|—\s*)(?:ก่อน|หลัง)\s*\d+\s*(?:ข้อ|คะแนน)?/i.test(item.name || ''));
   // Filter on the page too, so existing records immediately stop showing
   // summary columns even before the next data sync replaces them.
   const visibleItems = assignments.filter(item => !isSummaryOrNote(item.name));
+  const finalParts = visibleItems.filter(isFinalPart).map(item => ({
+    ...item,
+    displayName: (item.name || '').replace(/^(?:สอบ)?ปลายภาค\s*—\s*/i, '')
+  }));
   const tests = visibleItems.filter(isTest);
-  const works = visibleItems.filter(item => !isTest(item));
+  const works = visibleItems.filter(item => !isFinalPart(item) && !isTest(item));
   const escapeHTML = (value) => String(value ?? '').replace(/[&<>"']/g, char => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[char]);
   // Existing synced data can contain a short "หลัง 10 ข้อ" header because
   // Google Sheets exports merged cells only once.  Test columns are ordered
@@ -179,14 +187,18 @@ function renderResult(id, data) {
     </div>`;
   }).join('');
 
+  const finalGrid = document.getElementById("final-grid");
   unitGrid.innerHTML = testsWithUnitNames.length ? renderItems(testsWithUnitNames) : '<p class="empty-items">ไม่มีข้อมูลแบบทดสอบรายข้อ</p>';
   itemGrid.innerHTML = works.length ? renderItems(works) : '<p class="empty-items">ไม่มีข้อมูลงานในชั้นเรียน</p>';
+  if(finalGrid) finalGrid.innerHTML = finalParts.length ? renderItems(finalParts) : '<p class="empty-items">ไม่มีข้อมูลคะแนนสอบปลายภาค (ข้อกา/ข้อเขียน)</p>';
 
   // Hide assignment sections if no data
   const sectionQuiz = document.getElementById("section-quiz");
   const sectionWork = document.getElementById("section-work");
+  const sectionFinal = document.getElementById("section-final-parts");
   if(sectionQuiz) sectionQuiz.style.display = '';
   if(sectionWork) sectionWork.style.display = '';
+  if(sectionFinal) sectionFinal.style.display = finalParts.length > 0 ? '' : 'none';
 
   // Hide admin button when viewing result
   const adminBtn = document.querySelector('.admin-login-btn');
