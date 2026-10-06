@@ -3,8 +3,142 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>จัดการคะแนน — วิชาโปรแกรมฐานข้อมูล</title>
-<link rel="stylesheet" href="css/style.css?v=18">
+<title>จัดการคะแนนและเช็คชื่อ — ระบบครูผู้สอน</title>
+<link rel="stylesheet" href="css/style.css?v=21">
+<style>
+  /* === Tab System === */
+  .admin-tabs-nav {
+    display: flex;
+    gap: 6px;
+    padding: 6px;
+    background: rgba(0,0,0,0.2);
+    border-radius: 14px;
+    margin-bottom: 24px;
+  }
+  .tab-btn {
+    background: none;
+    border: none;
+    color: var(--ink-dim);
+    font-size: 14px;
+    font-weight: 500;
+    cursor: pointer;
+    padding: 10px 20px;
+    border-radius: 10px;
+    transition: all 0.2s;
+    white-space: nowrap;
+    font-family: var(--f-sans);
+  }
+  .tab-btn.active {
+    background: rgba(245, 158, 11, 0.15);
+    color: var(--gold);
+    box-shadow: 0 0 0 1px rgba(245,158,11,0.3);
+  }
+  .tab-btn:hover:not(.active) {
+    background: rgba(255,255,255,0.06);
+    color: var(--ink);
+  }
+  .tab-content { display: none; }
+  .tab-content.active { display: block; }
+
+  /* === Attendance Table === */
+  .att-radio-group {
+    display: flex;
+    justify-content: center;
+    gap: 6px;
+  }
+  .att-radio-label {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 3px;
+    cursor: pointer;
+    font-size: 11px;
+    color: var(--ink-dim);
+    padding: 6px 8px;
+    border-radius: 8px;
+    transition: all 0.15s;
+  }
+  .att-radio-label:has(input:checked) { background: rgba(255,255,255,0.1); color: var(--ink); }
+  .att-radio-label input { accent-color: var(--gold); }
+
+  /* === Subject Select Dropdown Button === */
+  .subject-dropdown-wrap { position: relative; }
+  
+  /* === Settings Card === */
+  .settings-section {
+    background: var(--glass);
+    border: 1px solid var(--glass-border);
+    border-radius: 14px;
+    padding: 24px;
+    margin-bottom: 20px;
+  }
+  .settings-section h3 {
+    margin: 0 0 16px;
+    font-size: 15px;
+    font-weight: 600;
+    color: var(--gold-soft);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .sub-aspect-row {
+    display: grid;
+    grid-template-columns: 1fr auto auto;
+    gap: 10px;
+    margin-bottom: 10px;
+    align-items: center;
+  }
+
+  /* === Score Edit Modal === */
+  .score-section-title {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--gold-soft);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    margin: 18px 0 10px;
+    padding-bottom: 6px;
+    border-bottom: 1px solid var(--glass-border);
+  }
+  .score-section-title:first-child { margin-top: 0; }
+  .jit-aspect-score-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 8px;
+  }
+  .jit-aspect-score-row label { flex: 1; font-size: 14px; color: var(--ink-dim); }
+
+  /* === Upload Zone === */
+  .upload-zone {
+    border: 2px dashed var(--glass-border);
+    border-radius: 12px;
+    padding: 30px;
+    text-align: center;
+    cursor: pointer;
+    transition: all 0.2s;
+    display: block;
+  }
+  .upload-zone:hover, .upload-zone.dragover {
+    border-color: rgba(245,158,11,0.5);
+    background: rgba(245,158,11,0.05);
+  }
+  .upload-zone .icon { font-size: 32px; margin-bottom: 10px; }
+  .upload-zone .fname { margin-top: 8px; color: var(--gold-soft); font-size: 13px; }
+
+  /* === Badge === */
+  .att-summary-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 2px 8px;
+    border-radius: 99px;
+    font-size: 12px;
+    font-weight: 600;
+  }
+  .att-summary-badge.present { background: rgba(16,185,129,0.15); color: var(--mint); }
+  .att-summary-badge.absent { background: rgba(239,68,68,0.15); color: var(--rose); }
+</style>
 </head>
 <body>
 
@@ -16,108 +150,220 @@
 
 <main class="admin-shell">
 
+  <!-- Top Bar -->
   <header class="admin-topbar glass--flat">
     <div class="admin-title">
-      <div class="icon">DB</div>
+      <div class="icon">🏫</div>
       <div>
-        <h1>จัดการคะแนนนักเรียน</h1>
-        <p>ระบบจัดการและซิงค์คะแนนอัตโนมัติ</p>
+        <h1>ระบบจัดการห้องเรียน</h1>
+        <p id="header-subtitle">เช็คชื่อ จัดการงาน และให้คะแนนนักเรียน</p>
       </div>
     </div>
     <div class="admin-actions">
-      <button class="btn btn--ghost" id="btn-sync-settings" style="padding: 0 10px;">⚙️ ตั้งค่า Auto-Sync</button>
-      <button class="btn btn--ghost" id="btn-sync-now" style="color: var(--mint); border-color: rgba(16,185,129,0.3); padding: 0 10px;">⟳ อัปเดตเดี๋ยวนี้</button>
-      <a href="history.html" class="btn btn--ghost" style="padding: 0 10px; display: inline-flex; align-items: center; justify-content: center; text-decoration: none;">🕒 ประวัติเข้าสู่ระบบ</a>
-      <button class="btn btn--ghost" id="btn-open-upload">อัปโหลดไฟล์ CSV</button>
-      <button class="btn btn--gold" id="btn-open-add">+ เพิ่มนักเรียน</button>
-      <button class="btn btn--ghost" id="btn-logout" style="color: var(--rose); margin-left: 10px; border-color: rgba(239,68,68,0.3);">🚪 ออกจากระบบ</button>
+      <button class="btn btn--ghost" id="btn-add-subject" title="เพิ่มรายวิชาใหม่">+ เพิ่มวิชาใหม่</button>
+      <select class="field" id="global-subject-filter" style="width: 250px; cursor: pointer;">
+        <option value="">-- กำลังโหลดวิชา... --</option>
+      </select>
+      <a href="/history.html" class="btn btn--ghost" style="text-decoration:none;">🕒 ประวัติ</a>
+      <button class="btn btn--ghost" id="btn-logout" style="color: var(--rose); border-color: rgba(239,68,68,0.3);">🚪 ออกจากระบบ</button>
     </div>
   </header>
 
-  <div class="admin-toolbar glass--flat">
-    <div style="display: flex; gap: 10px; flex: 1; max-width: 600px;">
-      <select class="field" id="subject-filter" style="width: 240px; cursor: pointer;">
-        <option value="">-- ทุกวิชา --</option>
-      </select>
-      <input class="field" id="search-input" type="text" placeholder="ค้นหาชื่อหรือรหัสนักเรียน" style="flex: 1;">
+  <!-- Tab Navigation -->
+  <div class="admin-tabs-nav">
+    <button class="tab-btn active" data-tab="tab-students" onclick="switchTab(this)">👨‍🎓 รายชื่อและคะแนน</button>
+    <button class="tab-btn" data-tab="tab-attendance" onclick="switchTab(this)">📅 เช็คชื่อเข้าเรียน</button>
+    <button class="tab-btn" data-tab="tab-settings" onclick="switchTab(this)">⚙️ ตั้งค่าวิชา</button>
+  </div>
+
+  <!-- =================== TAB 1: STUDENTS =================== -->
+  <div id="tab-students" class="tab-content active">
+    <!-- Toolbar -->
+    <div class="admin-toolbar glass--flat" style="margin-bottom: 20px;">
+      <div style="display: flex; gap: 10px; flex: 1; max-width: 500px;">
+        <input class="field" id="search-input" type="text" placeholder="🔍 ค้นหาชื่อหรือรหัสนักเรียน" style="flex: 1;">
+      </div>
+      <div class="admin-stats" style="margin: 0;">
+        <div class="admin-stat">
+          <div class="n" id="stat-count">0</div>
+          <div class="l">นักเรียนทั้งหมด</div>
+        </div>
+        <div class="admin-stat">
+          <div class="n" id="stat-avg">0.0</div>
+          <div class="l">คะแนนเฉลี่ย</div>
+        </div>
+      </div>
+      <div class="admin-actions">
+        <button class="btn btn--ghost" id="btn-open-upload">📥 อัปโหลด Excel</button>
+        <button class="btn btn--gold" id="btn-open-add">+ เพิ่มนักเรียน</button>
+      </div>
     </div>
-    <div class="admin-stats">
-      <div class="admin-stat">
-        <div class="n" id="stat-count">0</div>
-        <div class="l">นักเรียนทั้งหมด</div>
+
+    <!-- Table -->
+    <section class="table-card glass">
+      <div class="table-scroll">
+        <table class="score-table">
+          <thead>
+            <tr>
+              <th style="width: 64px; text-align: center;">เลขที่</th>
+              <th>นักเรียน</th>
+              <th style="text-align:right">งาน&nbsp;(<span id="th-work">30</span>)</th>
+              <th style="text-align:right">สอบระหว่างเรียน&nbsp;(<span id="th-mid">20</span>)</th>
+              <th style="text-align:right">จิตพิสัย&nbsp;(<span id="th-jit">20</span>)</th>
+              <th style="text-align:right">ปลายภาค&nbsp;(<span id="th-final">30</span>)</th>
+              <th style="text-align:right">รวม&nbsp;(100)</th>
+              <th style="width: 100px;"></th>
+            </tr>
+          </thead>
+          <tbody id="table-body"></tbody>
+        </table>
       </div>
-      <div class="admin-stat">
-        <div class="n" id="stat-avg">0.0</div>
-        <div class="l">คะแนนเฉลี่ย</div>
+    </section>
+  </div>
+
+  <!-- =================== TAB 2: ATTENDANCE =================== -->
+  <div id="tab-attendance" class="tab-content">
+    <div class="admin-toolbar glass--flat" style="margin-bottom: 20px;">
+      <div style="display: flex; gap: 15px; align-items: center;">
+        <label for="attendance-date" style="color: var(--ink-dim); font-size: 14px; white-space:nowrap;">วันที่สอน:</label>
+        <input type="date" id="attendance-date" class="field" style="width: 200px;">
+        <button class="btn btn--ghost" id="btn-load-attendance">ดึงรายชื่อ</button>
       </div>
+      <div class="admin-actions">
+        <span id="att-summary-text" style="font-size: 13px; color: var(--ink-dim);"></span>
+        <button class="btn btn--gold" id="btn-save-attendance">💾 บันทึกการเช็คชื่อ</button>
+      </div>
+    </div>
+
+    <section class="table-card glass">
+      <div class="table-scroll">
+        <table class="score-table">
+          <thead>
+            <tr>
+              <th style="width: 64px; text-align: center;">เลขที่</th>
+              <th>รหัส - ชื่อนักเรียน</th>
+              <th style="text-align:center; width: 90px;">✅ มาเรียน</th>
+              <th style="text-align:center; width: 90px;">❌ ขาด</th>
+              <th style="text-align:center; width: 90px;">📋 ลา</th>
+              <th style="text-align:center; width: 90px;">⏰ สาย</th>
+            </tr>
+          </thead>
+          <tbody id="attendance-table-body">
+            <tr><td colspan="6" style="text-align:center; padding: 30px; color: var(--ink-dim);">กรุณาเลือกวิชาและวันที่ แล้วกด "ดึงรายชื่อ"</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+  </div>
+
+  <!-- =================== TAB 3: SETTINGS =================== -->
+  <div id="tab-settings" class="tab-content">
+    <div style="max-width: 780px; margin: 0 auto;">
+
+      <!-- Course Info -->
+      <div class="settings-section">
+        <h3>📚 ข้อมูลรายวิชา</h3>
+        <div style="display: grid; grid-template-columns: 1fr 2fr 1fr; gap: 12px;">
+          <div>
+            <label class="field-label">รหัสวิชา</label>
+            <input type="text" class="field" id="cfg-course-code" placeholder="เช่น 2204-2007">
+          </div>
+          <div>
+            <label class="field-label">ชื่อวิชา</label>
+            <input type="text" class="field" id="cfg-course-name" placeholder="เช่น โปรแกรมฐานข้อมูล">
+          </div>
+          <div>
+            <label class="field-label">กลุ่มเรียน</label>
+            <input type="text" class="field" id="cfg-study-group" placeholder="เช่น ธดท.2/1">
+          </div>
+        </div>
+      </div>
+
+      <!-- Score Structure -->
+      <div class="settings-section">
+        <h3>📊 โครงสร้างคะแนนรวม</h3>
+        <div style="display: grid; grid-template-columns: 1fr 1fr 1fr 1fr; gap: 12px;">
+          <div>
+            <label class="field-label">คะแนนเต็ม งาน</label>
+            <input type="number" class="field" id="cfg-work" value="30" min="0">
+          </div>
+          <div>
+            <label class="field-label">คะแนนเต็ม สอบระหว่างเรียน</label>
+            <input type="number" class="field" id="cfg-mid" value="20" min="0">
+          </div>
+          <div>
+            <label class="field-label">คะแนนเต็ม จิตพิสัย</label>
+            <input type="number" class="field" id="cfg-jit" value="20" min="0">
+          </div>
+          <div>
+            <label class="field-label">คะแนนเต็ม ปลายภาค</label>
+            <input type="number" class="field" id="cfg-final" value="30" min="0">
+          </div>
+        </div>
+      </div>
+
+      <!-- JIT Aspects -->
+      <div class="settings-section">
+        <h3>🧠 ด้านย่อยของคะแนนจิตพิสัย</h3>
+        <label style="display:flex; align-items:center; gap:10px; cursor:pointer; margin-bottom: 16px;">
+          <input type="checkbox" id="cfg-jit-show" style="accent-color: var(--gold); width: 16px; height: 16px;">
+          <span style="font-size: 14px;">แสดงคะแนนจิตพิสัยให้นักเรียนเห็น</span>
+        </label>
+        <div id="jit-aspects-container"></div>
+        <button class="btn btn--ghost" onclick="addJitAspect()" style="margin-top: 8px; width: 100%;">+ เพิ่มด้านจิตพิสัย</button>
+      </div>
+
+      <button class="btn btn--gold" onclick="saveConfig()" style="width: 100%; padding: 14px;">💾 บันทึกข้อมูลวิชาทั้งหมด</button>
     </div>
   </div>
 
-  <section class="chart-card glass" style="padding: 20px; margin-bottom: 24px;">
-    <h2 style="margin:0 0 16px; font-size:16px; font-weight:600; font-family:var(--f-display); color:var(--ink);">สรุปจำนวนนักเรียนแยกตามเกรด</h2>
-    <div style="height: 250px; position:relative;">
-      <canvas id="gradeChart"></canvas>
-    </div>
-  </section>
-
-  <section class="table-card glass">
-    <div class="table-scroll">
-      <table class="score-table">
-        <thead>
-          <tr>
-            <th style="width: 70px; text-align: center;">เลขที่</th>
-            <th>นักเรียน</th>
-            <th style="text-align:right">งาน (30)</th>
-            <th style="text-align:right">ระหว่างเรียน (20)</th>
-            <th style="text-align:right">จิตพิสัย (20)</th>
-            <th style="text-align:right">ปลายภาค (30)</th>
-            <th style="text-align:right">รวม (100)</th>
-            <th></th>
-          </tr>
-        </thead>
-        <tbody id="table-body"></tbody>
-      </table>
-    </div>
-  </section>
-
 </main>
 
+<!-- ===== MODAL: Add/Edit Student Score ===== -->
 <div class="modal-overlay" id="score-modal-overlay">
-  <div class="modal glass">
+  <div class="modal glass" style="max-width: 560px;">
     <div class="modal-head">
-      <h2 id="modal-title">เพิ่มนักเรียน</h2>
-      <button class="modal-close" id="modal-close-btn" aria-label="ปิด">&times;</button>
+      <h2 id="modal-title">เพิ่ม / แก้ไขนักเรียน</h2>
+      <button class="modal-close" id="modal-close-btn">&times;</button>
     </div>
     <form id="score-form">
-      <input type="hidden" id="f-editing-id">
-      <div class="modal-grid">
-        <div class="span2">
-          <label class="field-label" for="f-name">ชื่อ-นามสกุล</label>
-          <input class="field" id="f-name" required placeholder="เช่น นายกณวรรธน์ วราพุฒ">
+      <div class="modal-body">
+        <input type="hidden" id="f-editing-id">
+        
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 4px;">
+          <div class="span2">
+            <label class="field-label" for="f-name">ชื่อ-นามสกุล</label>
+            <input class="field" id="f-name" required placeholder="เช่น นายกณวรรธน์ วราพุฒ">
+          </div>
+          <div class="span2">
+            <label class="field-label" for="f-id">รหัสประจำตัวนักเรียน</label>
+            <input class="field" id="f-id" required placeholder="เช่น 68219100001">
+          </div>
         </div>
-        <div class="span2">
-          <label class="field-label" for="f-id">รหัสประจำตัวนักเรียน</label>
-          <input class="field" id="f-id" required placeholder="เช่น 68219100001">
+
+        <p class="score-section-title">📝 คะแนนงานและสอบ</p>
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+          <div>
+            <label class="field-label" for="f-work">คะแนนเก็บ (งาน) / <span id="f-max-work">30</span></label>
+            <input class="field" id="f-work" type="number" step="0.01" min="0" value="0">
+          </div>
+          <div>
+            <label class="field-label" for="f-mid">สอบระหว่างเรียน / <span id="f-max-mid">20</span></label>
+            <input class="field" id="f-mid" type="number" step="0.01" min="0" value="0">
+          </div>
+          <div>
+            <label class="field-label" for="f-final">สอบปลายภาค / <span id="f-max-final">30</span></label>
+            <input class="field" id="f-final" type="number" step="0.01" min="0" value="0">
+          </div>
         </div>
-        <div>
-          <label class="field-label" for="f-work">คะแนนเก็บ (งาน)</label>
-          <input class="field" id="f-work" type="number" step="0.01" min="0" max="30" required value="0">
-          <p class="modal-hint">เต็ม 30 คะแนน</p>
-        </div>
-        <div>
-          <label class="field-label" for="f-mid">สอบระหว่างเรียน</label>
-          <input class="field" id="f-mid" type="number" step="0.01" min="0" max="20" required value="0">
-          <p class="modal-hint">เต็ม 20 คะแนน (เฉพาะหลังเรียน)</p>
-        </div>
-        <div>
-          <label class="field-label" for="f-jit">จิตพิสัย</label>
-          <input class="field" id="f-jit" type="number" step="0.01" min="0" max="20" required value="0">
-          <p class="modal-hint">เต็ม 20 คะแนน</p>
-        </div>
-        <div>
-          <label class="field-label" for="f-final">สอบปลายภาค</label>
-          <input class="field" id="f-final" type="number" step="0.01" min="0" max="30" required value="0">
-          <p class="modal-hint">เต็ม 30 คะแนน</p>
+
+        <p class="score-section-title">🧠 คะแนนจิตพิสัย / <span id="f-max-jit">20</span></p>
+        <div id="jit-score-inputs">
+          <!-- Populated by JS based on config -->
+          <div>
+            <label class="field-label" for="f-jit">คะแนนจิตพิสัย (รวม)</label>
+            <input class="field" id="f-jit" type="number" step="0.01" min="0" value="0">
+          </div>
         </div>
       </div>
       <div class="modal-foot">
@@ -128,89 +374,69 @@
   </div>
 </div>
 
+<!-- ===== MODAL: Upload Excel ===== -->
 <div class="modal-overlay" id="upload-modal-overlay">
-  <div class="modal glass" style="max-width:480px;">
+  <div class="modal glass" style="max-width: 480px;">
     <div class="modal-head">
-      <h2>อัปโหลดไฟล์ CSV</h2>
-      <button class="modal-close" id="upload-modal-close-btn" aria-label="ปิด">&times;</button>
+      <h2>📥 อัปโหลดรายชื่อนักเรียน (Excel)</h2>
+      <button class="modal-close" id="upload-close-btn">&times;</button>
     </div>
     <div class="modal-body">
-      <div class="field-group">
-        <label class="field-label" for="upload-subject">เลือกวิชา</label>
-        <select id="upload-subject" class="field" style="margin-bottom: 15px;">
-          <option value="วิชาเทคโนโลยีการนำเข้าข้อมูลเข้าสู่ระบบคอมพิวเตอร์">วิชาเทคโนโลยีการนำเข้าข้อมูลเข้าสู่ระบบคอมพิวเตอร์</option>
-          <option value="วิชาโปรแกรมฐานข้อมูล ธดท.2/2 (1)">วิชาโปรแกรมฐานข้อมูล ธดท.2/2 (1)</option>
-          <option value="วิชาโปรแกรมฐานข้อมูล ธดท.2/2 (2)">วิชาโปรแกรมฐานข้อมูล ธดท.2/2 (2)</option>
-        </select>
-      </div>
-      <label class="upload-zone" id="upload-zone" for="csv-file-input">
-        <div class="icon">⇧</div>
-        <p style="margin:0; font-size:14px;">ลากไฟล์มาวาง หรือคลิกเพื่อเลือกไฟล์</p>
-        <p class="modal-hint" style="margin-top:6px;">รองรับไฟล์ .csv เท่านั้น</p>
+      <label class="upload-zone" id="upload-zone" for="excel-file-input">
+        <div class="icon">📄</div>
+        <p style="margin:0; font-size:14px; font-weight:500;">ลากไฟล์มาวาง หรือคลิกเพื่อเลือกไฟล์</p>
+        <p class="modal-hint" style="margin-top:6px;">รองรับไฟล์ .xlsx, .xls</p>
         <p class="fname" id="upload-filename"></p>
       </label>
+      <input type="file" id="excel-file-input" accept=".xlsx, .xls" style="display:none;">
+      <div style="margin-top: 12px; padding: 12px; background: rgba(245,158,11,0.08); border-radius: 8px; font-size: 13px; border: 1px solid rgba(245,158,11,0.2);">
+        <strong style="color: var(--gold-soft);">📌 รูปแบบไฟล์ที่รองรับ:</strong><br>
+        <span style="color: var(--ink-dim);">แถวที่ 1-3 = หัวตาราง (ระบบจะข้ามอัตโนมัติ) แถวที่ 4 เป็นต้นไป = ข้อมูลนักเรียน<br>
+        คอลัมน์ B = เลขประจำตัว, คอลัมน์ C = ชื่อ-สกุล</span>
+      </div>
     </div>
-    <input type="file" id="csv-file-input" accept=".csv" style="display:none;">
     <div class="modal-foot">
-      <button type="button" class="btn btn--ghost" id="upload-cancel-btn">ยกเลิก</button>
-      <button type="button" class="btn btn--gold" id="upload-confirm-btn">อัปโหลด</button>
+      <button class="btn btn--ghost" id="upload-cancel-btn">ยกเลิก</button>
+      <button class="btn btn--gold" id="btn-confirm-upload">📥 อัปโหลด</button>
     </div>
   </div>
 </div>
 
-  <!-- Student Details Modal -->
-  <div class="modal-overlay" id="details-modal-overlay">
-    <div class="modal" id="details-modal" role="dialog" aria-modal="true">
-      <div class="modal-head">
-        <h2 id="details-student-name">รายละเอียดคะแนน</h2>
-        <button class="modal-close" id="details-modal-close-btn" aria-label="ปิด">&times;</button>
-      </div>
-      <div class="modal-body">
-        <p id="details-student-id" style="color: rgba(255,255,255,0.6); margin-top: -10px; margin-bottom: 15px; font-size: 14px;"></p>
-        
-        <div class="modal-table-container" id="details-assignments-container">
-          <!-- JS will populate this -->
+<!-- ===== MODAL: Add New Subject ===== -->
+<div class="modal-overlay" id="subject-modal-overlay">
+  <div class="modal glass" style="max-width: 480px;">
+    <div class="modal-head">
+      <h2>➕ เพิ่มรายวิชาใหม่</h2>
+      <button class="modal-close" id="subject-close-btn">&times;</button>
+    </div>
+    <div class="modal-body">
+      <div style="display: grid; gap: 12px;">
+        <div>
+          <label class="field-label">รหัสวิชา</label>
+          <input type="text" class="field" id="new-course-code" placeholder="เช่น 2204-2007">
         </div>
-      </div>
-      <div class="modal-foot">
-        <button type="button" class="btn btn--ghost" id="details-close-btn">ปิด</button>
+        <div>
+          <label class="field-label">ชื่อวิชา</label>
+          <input type="text" class="field" id="new-course-name" placeholder="เช่น โปรแกรมฐานข้อมูล">
+        </div>
+        <div>
+          <label class="field-label">กลุ่มเรียน</label>
+          <input type="text" class="field" id="new-study-group" placeholder="เช่น ธดท.2/1">
+        </div>
+        <div>
+          <label class="field-label">ชื่ออ้างอิงในระบบ (ชื่อสั้นๆ ไม่ซ้ำกัน)</label>
+          <input type="text" class="field" id="new-subject-key" placeholder="เช่น IT2-1">
+        </div>
       </div>
     </div>
-  </div>
-
-  <!-- Sync Settings Modal -->
-  <div class="modal-overlay" id="sync-settings-overlay">
-    <div class="modal" id="sync-settings-modal" role="dialog" aria-modal="true">
-      <div class="modal-head">
-        <h2>ตั้งค่า Auto-Sync จาก Google Sheets</h2>
-        <button class="modal-close" id="sync-modal-close-btn" aria-label="ปิด">&times;</button>
-      </div>
-      <div class="modal-body">
-        <div style="margin-bottom: 12px; padding: 10px 14px; background: rgba(16,185,129,0.08); border-radius: 8px; font-size: 13px; color: var(--mint); border: 1px solid rgba(16,185,129,0.25); display: flex; align-items: center; gap: 8px;">
-          <span>🔄</span>
-          <span><strong>ระบบ Auto-Sync ทำงานอัตโนมัติ:</strong> ดึงคะแนนใหม่จากชีททุก 5 นาทีเมื่อมีผู้เข้าใช้งาน ไม่จำเป็นต้องคอยกดอัปเดตเอง</span>
-        </div>
-        <div style="margin-bottom: 20px; padding: 12px 15px; background: rgba(15,23,42,0.04); border-radius: 8px; font-size: 13px; border: 1px solid var(--glass-border);">
-          <strong style="color: var(--mint);">วิธีดึงคะแนน:</strong> วางลิงก์ Google Sheets (ที่เปิดแชร์สาธารณะ) ลงในช่องด้านล่าง<br>
-          <span style="opacity: 0.6; word-break: break-all;">รูปแบบ: https://docs.google.com/spreadsheets/d/.../export?format=csv&gid=0</span>
-        </div>
-        
-        <div id="sync-configs-container">
-          <!-- JS will render input fields here -->
-        </div>
-        
-        <button type="button" class="btn btn--ghost" id="add-config-btn" style="width: 100%; margin-top: 10px;">+ เพิ่มวิชา</button>
-      </div>
-      <div class="modal-foot">
-        <button type="button" class="btn btn--ghost" id="sync-cancel-btn">ยกเลิก</button>
-        <button type="button" class="btn btn--gold" id="sync-save-btn">บันทึกการตั้งค่า</button>
-      </div>
+    <div class="modal-foot">
+      <button class="btn btn--ghost" id="subject-cancel-btn">ยกเลิก</button>
+      <button class="btn btn--gold" id="btn-confirm-subject">สร้างวิชา</button>
     </div>
   </div>
+</div>
 
-
-
-  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-  <script src="js/admin.js?v=13"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script src="js/admin.js?v=20"></script>
 </body>
 </html>
