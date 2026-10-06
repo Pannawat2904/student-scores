@@ -1,0 +1,189 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>จัดการคะแนนและการเช็คชื่อ</title>
+<link rel="stylesheet" href="css/style.css?v=20">
+<style>
+  /* Tab Navigation Styles */
+  .admin-tabs {
+    display: flex;
+    gap: 15px;
+    margin-bottom: 20px;
+    border-bottom: 1px solid var(--glass-border);
+    padding-bottom: 10px;
+  }
+  .tab-btn {
+    background: none;
+    border: none;
+    color: var(--ink-dim);
+    font-size: 16px;
+    font-weight: 500;
+    cursor: pointer;
+    padding: 8px 16px;
+    border-radius: 8px;
+    transition: all 0.2s;
+  }
+  .tab-btn.active {
+    background: rgba(255, 255, 255, 0.1);
+    color: var(--gold);
+    box-shadow: 0 0 10px rgba(245, 158, 11, 0.2);
+  }
+  .tab-btn:hover:not(.active) {
+    background: rgba(255, 255, 255, 0.05);
+    color: var(--ink);
+  }
+  .tab-content {
+    display: none;
+  }
+  .tab-content.active {
+    display: block;
+  }
+</style>
+</head>
+<body>
+
+<div class="aurora" aria-hidden="true">
+  <div class="aurora__blob aurora__blob--a"></div>
+  <div class="aurora__blob aurora__blob--b"></div>
+  <div class="aurora__blob aurora__blob--c"></div>
+</div>
+
+<main class="admin-shell">
+
+  <header class="admin-topbar glass--flat">
+    <div class="admin-title">
+      <div class="icon">DB</div>
+      <div>
+        <h1>ระบบจัดการห้องเรียน</h1>
+        <p>เช็คชื่อ จัดการงาน และให้คะแนนนักเรียน</p>
+      </div>
+    </div>
+    <div class="admin-actions">
+      <select class="field" id="global-subject-filter" style="width: 240px; cursor: pointer; margin-right: 15px;">
+        <option value="">-- โหลดข้อมูลวิชา --</option>
+      </select>
+      <button class="btn btn--ghost" id="btn-logout" style="color: var(--rose); border-color: rgba(239,68,68,0.3);">🚪 ออกจากระบบ</button>
+    </div>
+  </header>
+
+  <div class="admin-tabs glass--flat" style="padding: 10px 20px; margin-bottom: 24px; border-radius: 12px; border: 1px solid var(--glass-border); display: flex; gap: 10px;">
+    <button class="tab-btn active" onclick="switchTab('tab-students')">👨‍🎓 นักเรียน & คะแนน</button>
+    <button class="tab-btn" onclick="switchTab('tab-attendance')">📅 เช็คชื่อเข้าเรียน</button>
+    <button class="tab-btn" onclick="switchTab('tab-settings')">⚙️ ตั้งค่างานและโครงสร้างคะแนน</button>
+  </div>
+
+  <!-- TAB 1: Students & Scores -->
+  <div id="tab-students" class="tab-content active">
+    <div class="admin-toolbar glass--flat" style="margin-bottom: 20px;">
+      <div style="display: flex; gap: 10px; flex: 1; max-width: 600px;">
+        <input class="field" id="search-input" type="text" placeholder="ค้นหาชื่อหรือรหัสนักเรียน" style="flex: 1;">
+      </div>
+      <div class="admin-actions">
+        <button class="btn btn--gold" id="btn-open-add">+ เพิ่มนักเรียน</button>
+      </div>
+    </div>
+
+    <section class="table-card glass">
+      <div class="table-scroll">
+        <table class="score-table">
+          <thead>
+            <tr>
+              <th style="width: 70px; text-align: center;">เลขที่</th>
+              <th>นักเรียน</th>
+              <th style="text-align:right">งาน (<span id="th-work">30</span>)</th>
+              <th style="text-align:right">สอบระหว่างเรียน (<span id="th-mid">20</span>)</th>
+              <th style="text-align:right">จิตพิสัย (<span id="th-jit">20</span>)</th>
+              <th style="text-align:right">ปลายภาค (<span id="th-final">30</span>)</th>
+              <th style="text-align:right">รวม (100)</th>
+              <th>จัดการ</th>
+            </tr>
+          </thead>
+          <tbody id="table-body"></tbody>
+        </table>
+      </div>
+    </section>
+  </div>
+
+  <!-- TAB 2: Attendance -->
+  <div id="tab-attendance" class="tab-content">
+    <div class="admin-toolbar glass--flat" style="margin-bottom: 20px;">
+      <div style="display: flex; gap: 15px; align-items: center;">
+        <label for="attendance-date" class="field-label" style="margin:0;">วันที่สอน:</label>
+        <input type="date" id="attendance-date" class="field" style="width: 200px;">
+        <button class="btn btn--ghost" onclick="loadAttendance()">ดึงข้อมูลเช็คชื่อ</button>
+      </div>
+      <div class="admin-actions">
+        <button class="btn btn--gold" onclick="saveAttendance()">บันทึกการเช็คชื่อ</button>
+      </div>
+    </div>
+
+    <section class="table-card glass">
+      <div class="table-scroll">
+        <table class="score-table">
+          <thead>
+            <tr>
+              <th style="width: 70px; text-align: center;">เลขที่</th>
+              <th>รหัส - ชื่อนักเรียน</th>
+              <th style="text-align:center; width: 100px;">มาเรียน</th>
+              <th style="text-align:center; width: 100px;">ขาด</th>
+              <th style="text-align:center; width: 100px;">ลา</th>
+              <th style="text-align:center; width: 100px;">สาย</th>
+            </tr>
+          </thead>
+          <tbody id="attendance-table-body">
+             <tr><td colspan="6" style="text-align:center; padding: 20px;">กรุณาเลือกวิชาและวันที่ เพื่อดึงรายชื่อ</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+  </div>
+
+  <!-- TAB 3: Settings -->
+  <div id="tab-settings" class="tab-content">
+    <section class="glass" style="padding: 24px; border-radius: 12px; max-width: 800px; margin: 0 auto;">
+      <h2 style="margin-top:0;">โครงสร้างคะแนนวิชานี้</h2>
+      <div style="display: grid; grid-template-columns: 1fr 1fr 1fr 1fr; gap: 15px; margin-bottom: 20px;">
+        <div>
+          <label class="field-label">คะแนนเต็ม งาน</label>
+          <input type="number" class="field" id="cfg-work" value="30">
+        </div>
+        <div>
+          <label class="field-label">คะแนนเต็ม สอบระหว่างเรียน</label>
+          <input type="number" class="field" id="cfg-mid" value="20">
+        </div>
+        <div>
+          <label class="field-label">คะแนนเต็ม จิตพิสัย</label>
+          <input type="number" class="field" id="cfg-jit" value="20">
+        </div>
+        <div>
+          <label class="field-label">คะแนนเต็ม ปลายภาค</label>
+          <input type="number" class="field" id="cfg-final" value="30">
+        </div>
+      </div>
+      <button class="btn btn--gold" onclick="saveConfig()" style="width: 100%; margin-bottom: 30px;">บันทึกโครงสร้างคะแนน</button>
+
+      <h2>รายการงานย่อย (Assignments)</h2>
+      <p style="color:var(--ink-dim); font-size: 14px;">สร้างงานย่อยเพื่อให้คะแนนเด็กรายชิ้น (ยังไม่เปิดใช้งานในเวอร์ชันนี้ แต่เตรียมฐานข้อมูลไว้แล้ว)</p>
+      
+      <!-- List assignments here in the future -->
+      <div class="item-grid" id="assignments-list" style="opacity: 0.5;">
+         <div class="glass" style="padding: 15px; text-align: center;">Coming soon...</div>
+      </div>
+    </section>
+  </div>
+
+</main>
+
+<script src="js/admin_v2.js?v=1"></script>
+<script>
+  function switchTab(tabId) {
+    document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
+    document.querySelectorAll('.tab-btn').forEach(el => el.classList.remove('active'));
+    document.getElementById(tabId).classList.add('active');
+    event.currentTarget.classList.add('active');
+  }
+</script>
+</body>
+</html>

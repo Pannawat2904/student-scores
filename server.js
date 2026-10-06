@@ -12,6 +12,7 @@ const cors = require('cors');
 const path = require('path');
 const multer = require('multer');
 const { createClient } = require('@supabase/supabase-js');
+const xlsx = require('xlsx');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -200,7 +201,11 @@ app.post('/api/scores', cookieAuth, async (req, res) => {
     jit: parseFloat(req.body.jit) || 0,
     final: parseFloat(req.body.final) || 0,
   };
+  if (req.body.assignments) {
+    studentData.assignments = req.body.assignments;
+  }
   studentData.total = studentData.work + studentData.mid + studentData.jit + studentData.final;
+
 
   const { error } = await supabase.from('scores').upsert(studentData, { onConflict: 'id, subject' });
   if (error) return res.status(500).json({ error: error.message });
@@ -252,6 +257,60 @@ app.post('/api/config', cookieAuth, async (req, res) => {
   }
   
   res.json({ success: true, message: 'Config saved' });
+});
+
+// PUT /api/config/:subject - Update a single subject's config
+app.put('/api/config/:subject', cookieAuth, async (req, res) => {
+  const subject = req.params.subject;
+  const configUpdate = req.body;
+  configUpdate.subject = subject;
+  
+  const { error } = await supabase.from('configs').upsert(configUpdate, { onConflict: 'subject' });
+  if (error) return res.status(500).json({ error: error.message });
+  res.json({ success: true, message: 'Subject config updated' });
+});
+
+// GET /api/attendance - Get attendance for a subject and date
+app.get('/api/attendance', cookieAuth, async (req, res) => {
+  const { subject, date } = req.query;
+  if (!subject || !date) return res.status(400).json({ error: 'Missing subject or date' });
+  const { data, error } = await supabase.from('attendance').select('*').eq('subject', subject).eq('date', date);
+  if (error) return res.status(500).json({ error: error.message });
+  res.json(data);
+});
+
+// POST /api/attendance - Save attendance array
+app.post('/api/attendance', cookieAuth, async (req, res) => {
+  const { subject, date, attendances } = req.body;
+  if (!subject || !date || !Array.isArray(attendances)) return res.status(400).json({ error: 'Invalid payload' });
+  
+  const records = attendances.map(a => ({
+    subject,
+    date,
+    student_id: a.student_id,
+    status: a.status
+  }));
+
+  const { error } = await supabase.from('attendance').upsert(records, { onConflict: 'subject, date, student_id' });
+  if (error) return res.status(500).json({ error: error.message });
+  res.json({ success: true, message: 'Attendance saved' });
+});
+
+// GET /api/attendance/summary/:student_id - Get attendance summary for a student
+app.get('/api/attendance/summary/:student_id', async (req, res) => {
+  const student_id = req.params.student_id;
+  const subject = req.query.subject;
+  let query = supabase.from('attendance').select('status').eq('student_id', student_id);
+  if (subject) query = query.eq('subject', subject);
+  
+  const { data, error } = await query;
+  if (error) return res.status(500).json({ error: error.message });
+  
+  const summary = { present: 0, absent: 0, late: 0, leave: 0 };
+  data.forEach(row => {
+    if (summary[row.status] !== undefined) summary[row.status]++;
+  });
+  res.json(summary);
 });
 
 // CSV Parsing Helpers
@@ -429,6 +488,69 @@ app.post('/api/scores/upload', cookieAuth, upload.single('file'), async (req, re
       if (error) throw error;
     }
     res.json({ success: true, count: parsedStudents.length, message: 'CSV uploaded and processed' });
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
+// POST /api/students/upload-excel - Upload Excel to add student list
+app.post('/api/students/upload-excel', cookieAuth, upload.single('file'), async (req, res) => {
+  if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
+  const subject = req.body.subject;
+  if (!subject) return res.status(400).json({ error: 'Missing subject' });
+
+  try {
+    const workbook = xlsx.read(req.file.buffer, { type: 'buffer' });
+    const sheetName = workbook.SheetNames[0];
+    const worksheet = workbook.Sheets[sheetName];
+    // Convert sheet to JSON, array of arrays
+    const rows = xlsx.utils.sheet_to_json(worksheet, { header: 1 });
+
+    const newStudents = [];
+    const nowIso = new Date().toISOString();
+
+    // Skip the first 3 rows (headers)
+    for (let i = 3; i < rows.length; i++) {
+      const row = rows[i];
+      if (!row || row.length < 3) continue;
+      
+      const id = String(row[1] || '').trim();
+      const name = String(row[2] || '').trim();
+      
+      // Ensure ID looks valid (at least a few digits)
+      if (id && name && /\d+/.test(id)) {
+        newStudents.push({
+          id,
+          name,
+          subject,
+          work: 0,
+          mid: 0,
+          jit: 0,
+          final: 0,
+          total: 0,
+          assignments: [],
+          updated_at: nowIso
+        });
+      }
+    }
+
+    if (newStudents.length > 0) {
+      // Upsert: only insert if not exist, or update name if exist but won't overwrite scores if we do it smartly.
+      // Wait, upserting with 0 will overwrite existing scores. We should ideally only insert, or fetch first.
+      // Let's fetch existing students for this subject first.
+      const { data: existing } = await supabase.from('scores').select('id').eq('subject', subject);
+      const existingIds = new Set((existing || []).map(e => e.id));
+      
+      const toInsert = newStudents.filter(s => !existingIds.has(s.id));
+      
+      if (toInsert.length > 0) {
+        const { error } = await supabase.from('scores').insert(toInsert);
+        if (error) throw error;
+      }
+      return res.json({ success: true, count: toInsert.length, message: `เพิ่มรายชื่อสำเร็จ ${toInsert.length} คน` });
+    }
+
+    res.json({ success: true, count: 0, message: 'ไม่พบรายชื่อใหม่ หรือรูปแบบไฟล์ไม่ถูกต้อง' });
   } catch (err) {
     res.status(400).json({ error: err.message });
   }
