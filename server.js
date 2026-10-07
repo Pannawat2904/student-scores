@@ -135,7 +135,12 @@ app.get('/api/scores', async (req, res) => {
 
   const { data, error } = await supabase.from('scores').select('*').order('id', { ascending: true });
   if (error) return res.status(500).json({ error: error.message });
-  res.json(data);
+  
+  const formatted = (data || []).map(s => ({
+    ...s,
+    attendance: s.jit_scores?.attendance || null
+  }));
+  res.json(formatted);
 });
 
 // GET /api/scores/sync-status - Check current sync status and latest update times
@@ -204,6 +209,24 @@ app.get('/api/scores/:id', async (req, res) => {
       }
     } else {
       student.show_jit = true;
+    }
+
+    student.attendance = student.jit_scores?.attendance || null;
+
+    // Find other subjects this student is enrolled in for Quick Switch
+    try {
+      const { data: otherRecords } = await supabase
+        .from('scores')
+        .select('subject')
+        .eq('id', student.id);
+      
+      if (otherRecords && otherRecords.length > 1) {
+        student.other_subjects = [...new Set(otherRecords.map(r => r.subject))].filter(sub => sub !== student.subject);
+      } else {
+        student.other_subjects = [];
+      }
+    } catch(e) {
+      student.other_subjects = [];
     }
 
     res.json(student); // Return the first match if multiple
@@ -292,8 +315,12 @@ app.post('/api/config', cookieAuth, async (req, res) => {
   if (configs.length > 0) {
     const formattedConfigs = configs.map(c => ({
       subject: c.subject,
-      url: c.url,
-      jit_config: c.jit_config || { show_to_students: c.show_to_students === true }
+      url: c.url || '',
+      jit_config: {
+        ...(c.jit_config || {}),
+        show_to_students: c.show_to_students === true || c.jit_config?.show_to_students === true,
+        attendance_url: c.attendance_url || c.jit_config?.attendance_url || ''
+      }
     }));
     const { error } = await supabase.from('configs').insert(formattedConfigs);
     if (error) return res.status(500).json({ error: error.message });
@@ -508,6 +535,111 @@ function processCSVContent(content, subject) {
   return parsedStudents;
 }
 
+// Attendance CSV Parser
+function processAttendanceCSV(content, subject) {
+  let inQuotes = false;
+  let cleanContent = '';
+  for(let i=0; i<content.length; i++){
+    if(content[i] === '"') inQuotes = !inQuotes;
+    if(content[i] === '\n' && inQuotes) {
+      cleanContent += ' ';
+    } else {
+      cleanContent += content[i];
+    }
+  }
+
+  const lines = cleanContent.split('\n').map(l => l.trim()).filter(l => l);
+  const records = lines.map(parseCSVLine);
+
+  let weekRowIndex = -1, monthRowIndex = -1, dateRowIndex = -1, dataStartIndex = -1;
+
+  for (let i = 0; i < records.length; i++) {
+    const row = records[i];
+    const rowText = row.join(' ');
+    if (rowText.includes('สัปดาห์') && weekRowIndex === -1) weekRowIndex = i;
+    if (rowText.includes('เดือน') && monthRowIndex === -1) monthRowIndex = i;
+    if (rowText.includes('วันที่') && dateRowIndex === -1) dateRowIndex = i;
+    if (row[1] && row[1].trim().match(/^\d{11}$/)) {
+      dataStartIndex = i;
+      break;
+    }
+  }
+
+  if (dataStartIndex === -1) return [];
+
+  // Detect summary columns from top rows
+  let comeCol = -1, lateCol = -1, absentCol = -1, sickLeaveCol = -1, errandLeaveCol = -1, percentCol = -1;
+  for (let r = 0; r < Math.min(4, records.length); r++) {
+    for (let c = 4; c < records[r].length; c++) {
+      const val = (records[r][c] || '').trim();
+      if (val.includes('มาเรียน') || val === 'มา') comeCol = c;
+      else if (val.includes('สาย')) lateCol = c;
+      else if (val.includes('ขาด')) absentCol = c;
+      else if (val.includes('ลา') && !val.includes('ลำดับ')) {
+        if (sickLeaveCol === -1) sickLeaveCol = c;
+        else if (errandLeaveCol === -1) errandLeaveCol = c;
+      }
+      else if (val.includes('ร้อยละ')) percentCol = c;
+    }
+  }
+
+  if (percentCol === -1) {
+    if (errandLeaveCol > -1) percentCol = errandLeaveCol + 1;
+    else if (sickLeaveCol > -1) percentCol = sickLeaveCol + 2;
+  }
+
+  const sessionCols = [];
+  const startCol = 4;
+  const endCol = comeCol > -1 ? comeCol : 23;
+  for (let c = startCol; c < endCol; c++) {
+    const weekVal = weekRowIndex > -1 ? records[weekRowIndex][c]?.trim() : '';
+    const monthVal = monthRowIndex > -1 ? records[monthRowIndex][c]?.trim() : '';
+    const dateVal = dateRowIndex > -1 ? records[dateRowIndex][c]?.trim() : '';
+    if (dateVal || weekVal) {
+      sessionCols.push({ col: c, week: weekVal, month: monthVal, date: dateVal });
+    }
+  }
+
+  const students = [];
+  for (let i = dataStartIndex; i < records.length; i++) {
+    const row = records[i];
+    if (!row[1] || !row[1].trim().match(/^\d{11}$/)) continue;
+    const id = row[1].trim();
+    const name = row[2].trim();
+    const present = comeCol > -1 ? parseInt(row[comeCol]) || 0 : 0;
+    const late = lateCol > -1 ? parseInt(row[lateCol]) || 0 : 0;
+    const absent = absentCol > -1 ? parseInt(row[absentCol]) || 0 : 0;
+    const leave = (sickLeaveCol > -1 ? parseInt(row[sickLeaveCol]) || 0 : 0) + 
+                  (errandLeaveCol > -1 ? parseInt(row[errandLeaveCol]) || 0 : 0);
+    const percent = percentCol > -1 ? parseFloat(row[percentCol]) || 0 : 100;
+
+    const sessions = sessionCols.map(s => {
+      const statusRaw = (row[s.col] || '').trim();
+      return {
+        week: s.week,
+        date: s.date ? `${s.date} ${s.month}`.trim() : s.week,
+        val: statusRaw
+      };
+    });
+
+    students.push({
+      id,
+      name,
+      subject,
+      attendance: {
+        present,
+        late,
+        absent,
+        leave,
+        percent,
+        total_sessions: sessionCols.length,
+        sessions
+      }
+    });
+  }
+  return students;
+}
+
 // POST /api/scores/upload - Upload and parse CSV
 app.post('/api/scores/upload', cookieAuth, upload.single('file'), async (req, res) => {
   if (!req.file) {
@@ -539,21 +671,106 @@ const lastSyncBySubject = new Map(); // subject -> timestamp (ms)
 let lastGlobalSyncTime = 0;
 const inFlightSyncs = new Map(); // key -> Promise
 
-// Sync a single subject configuration
-async function syncSingleSubject(conf) {
-  if (!conf || !conf.url || !conf.subject) return 0;
-  const response = await fetch(conf.url);
-  if (!response.ok) throw new Error(`Failed to fetch ${conf.subject}: ${response.statusText}`);
-  const content = await response.text();
-  const parsedStudents = processCSVContent(content, conf.subject);
-  if (parsedStudents.length > 0) {
-    const { error: upsertError } = await supabase.from('scores').upsert(parsedStudents, { onConflict: 'id, subject' });
-    if (upsertError) throw upsertError;
+// Helper to convert Google Sheets edit URL to export CSV URL with gid
+function formatGoogleSheetsExportUrl(url) {
+  if (!url) return '';
+  let cleanUrl = url.trim();
+  if (cleanUrl.includes('/edit')) {
+    const gidMatch = cleanUrl.match(/gid=([a-zA-Z0-9]+)/);
+    cleanUrl = cleanUrl.replace(/\/edit.*$/, '/export?format=csv');
+    if (gidMatch) {
+      cleanUrl += '&gid=' + gidMatch[1];
+    }
   }
+  return cleanUrl;
+}
+
+// Sync a single subject configuration (Scores + Attendance)
+async function syncSingleSubject(conf) {
+  if (!conf || !conf.subject) return 0;
+  let totalCount = 0;
+
+  const attendanceUrl = conf.attendance_url || conf.jit_config?.attendance_url;
+  const attendanceMap = new Map(); // id -> { name, attendance }
+
+  // 1. Fetch & parse Attendance CSV if configured
+  if (attendanceUrl) {
+    try {
+      const exportAttUrl = formatGoogleSheetsExportUrl(attendanceUrl);
+      const attRes = await fetch(exportAttUrl);
+      if (attRes.ok) {
+        const attContent = await attRes.text();
+        const parsedAtt = processAttendanceCSV(attContent, conf.subject);
+        parsedAtt.forEach(item => {
+          attendanceMap.set(item.id, {
+            name: item.name,
+            attendance: item.attendance
+          });
+        });
+      } else {
+        console.warn(`[Sync] Failed to fetch attendance for ${conf.subject}: ${attRes.status}`);
+      }
+    } catch (e) {
+      console.warn(`[Sync] Error syncing attendance for ${conf.subject}:`, e.message);
+    }
+  }
+
+  // 2. Fetch & parse Scores CSV if configured
+  let parsedStudents = [];
+  if (conf.url) {
+    try {
+      const exportScoreUrl = formatGoogleSheetsExportUrl(conf.url);
+      const scoreRes = await fetch(exportScoreUrl);
+      if (scoreRes.ok) {
+        const scoreContent = await scoreRes.text();
+        parsedStudents = processCSVContent(scoreContent, conf.subject);
+      }
+    } catch (e) {
+      console.warn(`[Sync] Error syncing scores for ${conf.subject}:`, e.message);
+    }
+  }
+
+  // 3. Merge attendance with scores
+  const studentMap = new Map();
+
+  parsedStudents.forEach(s => {
+    studentMap.set(s.id, s);
+  });
+
+  // Attach attendance to existing score rows or add student if not yet in score sheet
+  attendanceMap.forEach((attInfo, id) => {
+    if (studentMap.has(id)) {
+      const s = studentMap.get(id);
+      s.jit_scores = { ...(s.jit_scores || {}), attendance: attInfo.attendance };
+    } else {
+      const nowIso = new Date().toISOString();
+      studentMap.set(id, {
+        id,
+        name: attInfo.name,
+        subject: conf.subject,
+        work: 0,
+        mid: 0,
+        jit: 0,
+        final: 0,
+        total: 0,
+        assignments: [],
+        jit_scores: { attendance: attInfo.attendance },
+        updated_at: nowIso
+      });
+    }
+  });
+
+  const finalStudents = Array.from(studentMap.values());
+  if (finalStudents.length > 0) {
+    const { error: upsertError } = await supabase.from('scores').upsert(finalStudents, { onConflict: 'id, subject' });
+    if (upsertError) throw upsertError;
+    totalCount = finalStudents.length;
+  }
+
   const now = Date.now();
   lastSyncBySubject.set(conf.subject, now);
   lastGlobalSyncTime = now;
-  return parsedStudents.length;
+  return totalCount;
 }
 
 // Sync all configured subjects in parallel

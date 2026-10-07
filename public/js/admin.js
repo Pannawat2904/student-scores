@@ -286,9 +286,40 @@ function showDetailsModal(id, subject) {
   document.getElementById("details-student-name").textContent = student.name;
   document.getElementById("details-student-id").textContent = `${rollNo ? `เลขที่: ${rollNo} | ` : ''}รหัสประจำตัว: ${student.id} | ${student.subject}`;
 
+  let attendanceHtml = '';
+  if (student.attendance) {
+    const att = student.attendance;
+    attendanceHtml = `
+      <div style="background: rgba(16,185,129,0.06); border: 1px solid rgba(16,185,129,0.25); border-radius: 12px; padding: 14px; margin-bottom: 16px;">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+          <h4 style="margin: 0; font-size: 14px; color: var(--mint);">📅 สถิติเวลาเรียน</h4>
+          <span style="font-weight: 700; font-size: 14px; color: ${att.percent >= 80 ? 'var(--mint)' : 'var(--rose)'};">${(att.percent || 100).toFixed(1)}%</span>
+        </div>
+        <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; text-align: center; font-size: 12px;">
+          <div style="background: rgba(255,255,255,0.03); padding: 8px 4px; border-radius: 8px;">
+            <div style="color: var(--mint);">มาเรียน</div>
+            <div style="font-weight: 700; font-size: 18px; margin-top: 2px;">${att.present || 0}</div>
+          </div>
+          <div style="background: rgba(255,255,255,0.03); padding: 8px 4px; border-radius: 8px;">
+            <div style="color: var(--gold-soft);">สาย</div>
+            <div style="font-weight: 700; font-size: 18px; margin-top: 2px;">${att.late || 0}</div>
+          </div>
+          <div style="background: rgba(255,255,255,0.03); padding: 8px 4px; border-radius: 8px;">
+            <div style="color: var(--rose);">ขาด</div>
+            <div style="font-weight: 700; font-size: 18px; margin-top: 2px;">${att.absent || 0}</div>
+          </div>
+          <div style="background: rgba(255,255,255,0.03); padding: 8px 4px; border-radius: 8px;">
+            <div style="color: #818cf8;">ลา</div>
+            <div style="font-weight: 700; font-size: 18px; margin-top: 2px;">${att.leave || 0}</div>
+          </div>
+        </div>
+      </div>
+    `;
+  }
+
   const container = document.getElementById("details-assignments-container");
   if (!student.assignments || student.assignments.length === 0) {
-    container.innerHTML = '<p style="text-align:center; opacity:0.5;">ไม่มีข้อมูลชิ้นงาน</p>';
+    container.innerHTML = attendanceHtml + '<p style="text-align:center; opacity:0.5;">ไม่มีข้อมูลชิ้นงาน</p>';
   } else {
     const tests = [];
     const works = [];
@@ -300,7 +331,7 @@ function showDetailsModal(id, subject) {
       }
     });
 
-    const renderTable = (title, items, colorVar) => {
+    const renderCategoryTable = (title, items, colorVar) => {
       if (items.length === 0) return '';
       let html = `<div class="assignments-category">
         <h4 style="color: var(--${colorVar});">${title} (${items.length} รายการ)</h4>
@@ -333,7 +364,7 @@ function showDetailsModal(id, subject) {
       return html;
     };
 
-    container.innerHTML = renderTable("แบบทดสอบ", tests, "mint") + renderTable("ใบงานและภาระงาน", works, "gold");
+    container.innerHTML = attendanceHtml + renderCategoryTable("แบบทดสอบ", tests, "mint") + renderCategoryTable("ใบงานและภาระงาน", works, "gold");
   }
 
   document.getElementById("details-modal").classList.add("show");
@@ -695,11 +726,12 @@ function renderConfigs() {
   
   currentConfigs.forEach((c) => {
     const isShowing = c.jit_config?.show_to_students === true;
-    addConfigRow(c.subject, c.url, isShowing);
+    const attUrl = c.attendance_url || c.jit_config?.attendance_url || '';
+    addConfigRow(c.subject, c.url, isShowing, attUrl);
   });
 }
 
-function addConfigRow(subject = '', url = '', showToStudents = false) {
+function addConfigRow(subject = '', url = '', showToStudents = false, attendanceUrl = '') {
   const container = document.getElementById("sync-configs-container");
   const div = document.createElement("div");
   div.className = "field-group";
@@ -709,10 +741,17 @@ function addConfigRow(subject = '', url = '', showToStudents = false) {
   
   div.innerHTML = `
     <div style="display: flex; flex-direction: column; gap: 8px;">
-      <input type="text" class="field config-subject" placeholder="ชื่อวิชา (เช่น คณิตศาสตร์)" value="${subject}" style="font-weight: 500;">
-      <div style="display: flex; gap: 8px;">
-        <input type="text" class="field config-url" placeholder="วางลิงก์ Google Sheets..." value="${url}" style="flex: 1; font-size: 13px;">
+      <div style="display: flex; gap: 8px; align-items: center;">
+        <input type="text" class="field config-subject" placeholder="ชื่อวิชา (เช่น การเขียนโปรแกรมเชิงวัตถุเบื้องต้น ธดท.2/2)" value="${subject}" style="flex: 1; font-weight: 500;">
         <button type="button" class="btn btn--ghost" style="color:var(--rose); padding: 0 12px; border: 1px solid rgba(239,68,68,0.2);" aria-label="ลบ" onclick="this.parentElement.parentElement.parentElement.remove()">🗑</button>
+      </div>
+      <div>
+        <label style="font-size: 11px; color: var(--ink-dim); display: block; margin-bottom: 2px;">📊 ลิงก์ Google Sheets คะแนน:</label>
+        <input type="text" class="field config-url" placeholder="วางลิงก์ Google Sheets คะแนน..." value="${url}" style="width: 100%; font-size: 13px;">
+      </div>
+      <div>
+        <label style="font-size: 11px; color: var(--ink-dim); display: block; margin-bottom: 2px;">📅 ลิงก์ Google Sheets เช็คชื่อเข้าเรียน (ถ้ามี):</label>
+        <input type="text" class="field config-att-url" placeholder="วางลิงก์ Google Sheets เช็คชื่อ (รวม ?gid=... ของแผ่นงานนั้น)..." value="${attendanceUrl}" style="width: 100%; font-size: 13px;">
       </div>
       <label style="display: inline-flex; align-items: center; gap: 8px; margin-top: 4px; font-size: 13px; cursor: pointer; color: var(--ink-dim); user-select: none;">
         <input type="checkbox" class="config-show-jit" ${showToStudents ? 'checked' : ''} style="cursor: pointer; width: 16px; height: 16px; accent-color: var(--mint);">
@@ -731,15 +770,27 @@ async function saveSyncSettings() {
   rows.forEach(r => {
     const subject = r.querySelector(".config-subject").value.trim();
     let url = r.querySelector(".config-url").value.trim();
+    let attUrl = r.querySelector(".config-att-url")?.value.trim() || '';
     const showToStudents = r.querySelector(".config-show-jit")?.checked === true;
-    if (subject && url) {
-      if (url.includes('/edit')) {
+    if (subject && (url || attUrl)) {
+      if (url && url.includes('/edit')) {
+        const gidMatch = url.match(/gid=([a-zA-Z0-9]+)/);
         url = url.replace(/\/edit.*$/, '/export?format=csv');
+        if (gidMatch) url += '&gid=' + gidMatch[1];
+      }
+      if (attUrl && attUrl.includes('/edit')) {
+        const gidMatch = attUrl.match(/gid=([a-zA-Z0-9]+)/);
+        attUrl = attUrl.replace(/\/edit.*$/, '/export?format=csv');
+        if (gidMatch) attUrl += '&gid=' + gidMatch[1];
       }
       newConfigs.push({ 
         subject, 
         url,
-        jit_config: { show_to_students: showToStudents }
+        attendance_url: attUrl,
+        jit_config: { 
+          show_to_students: showToStudents,
+          attendance_url: attUrl
+        }
       });
     }
   });

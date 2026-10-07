@@ -185,6 +185,130 @@ function renderResult(id, data) {
     sumGrade.style.color = gc.fg;
   }
 
+  // Quick Switch for students enrolled in other subjects
+  const qsContainer = document.getElementById("quick-switch-container");
+  const qsButtons = document.getElementById("quick-switch-buttons");
+  if (qsContainer && qsButtons) {
+    if (data.other_subjects && data.other_subjects.length > 0) {
+      qsButtons.innerHTML = '';
+      data.other_subjects.forEach(otherSub => {
+        const btn = document.createElement("button");
+        btn.type = "button";
+        btn.className = "btn btn--ghost";
+        btn.style.cssText = "font-size: 12px; padding: 4px 10px; background: rgba(99,102,241,0.15); border-color: rgba(99,102,241,0.3); color: #818cf8; cursor: pointer;";
+        btn.innerHTML = `👉 ดูวิชา <strong>${otherSub}</strong>`;
+        btn.addEventListener("click", async () => {
+          subjectFilter.value = otherSub;
+          const scoreData = await fetchStudentScore(id, otherSub);
+          if (scoreData) {
+            renderResult(id, scoreData);
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+          }
+        });
+        qsButtons.appendChild(btn);
+      });
+      qsContainer.style.display = "flex";
+    } else {
+      qsContainer.style.display = "none";
+    }
+  }
+
+  // Attendance rendering
+  const attSection = document.getElementById("section-attendance");
+  if (attSection) {
+    if (data.attendance) {
+      attSection.style.display = "block";
+      const att = data.attendance;
+      const attPres = document.getElementById("att-present");
+      const attLate = document.getElementById("att-late");
+      const attAbs = document.getElementById("att-absent");
+      const attLeave = document.getElementById("att-leave");
+      if (attPres) attPres.textContent = att.present || 0;
+      if (attLate) attLate.textContent = att.late || 0;
+      if (attAbs) attAbs.textContent = att.absent || 0;
+      if (attLeave) attLeave.textContent = att.leave || 0;
+      
+      const pct = typeof att.percent === 'number' ? att.percent : 100;
+      const attPctText = document.getElementById("att-percent-text");
+      if (attPctText) attPctText.textContent = pct.toFixed(1) + "%";
+      
+      const pctBar = document.getElementById("att-percent-bar");
+      if (pctBar) {
+        pctBar.style.width = Math.min(100, Math.max(0, pct)) + "%";
+        pctBar.style.background = pct >= 80 
+          ? "linear-gradient(90deg, var(--mint), #059669)" 
+          : "linear-gradient(90deg, var(--rose), #dc2626)";
+      }
+
+      const statusBadge = document.getElementById("att-badge-status");
+      if (statusBadge) {
+        if (pct >= 80) {
+          statusBadge.textContent = "✅ เวลาเรียนผ่านเกณฑ์";
+          statusBadge.style.background = "rgba(16,185,129,0.15)";
+          statusBadge.style.color = "var(--mint)";
+        } else {
+          statusBadge.textContent = "⚠️ เสี่ยง มส. (ต่ำกว่า 80%)";
+          statusBadge.style.background = "rgba(239,68,68,0.15)";
+          statusBadge.style.color = "var(--rose)";
+        }
+      }
+
+      // Sessions grid
+      const sessionsGrid = document.getElementById("att-sessions-grid");
+      const toggleBtn = document.getElementById("att-toggle-sessions-btn");
+      const sessionsContainer = document.getElementById("att-sessions-container");
+
+      if (sessionsGrid && att.sessions && att.sessions.length > 0) {
+        sessionsGrid.innerHTML = '';
+        att.sessions.forEach(sess => {
+          if (!sess.date && !sess.week) return;
+          const div = document.createElement("div");
+          div.style.cssText = "padding: 6px; border-radius: 8px; text-align: center; font-size: 11px; border: 1px solid var(--glass-border);";
+          
+          let stColor = "var(--ink-dim)";
+          let stBg = "rgba(255,255,255,0.02)";
+          let stText = "—";
+          const v = (sess.val || '').trim();
+
+          if (v === '1' || v.includes('มา')) {
+            stColor = "var(--mint)";
+            stBg = "rgba(16,185,129,0.1)";
+            stText = "มา";
+          } else if (v.includes('สาย')) {
+            stColor = "var(--gold-soft)";
+            stBg = "rgba(245,158,11,0.1)";
+            stText = "สาย";
+          } else if (v.includes('ขาด') || v === 'ข') {
+            stColor = "var(--rose)";
+            stBg = "rgba(239,68,68,0.1)";
+            stText = "ขาด";
+          } else if (v.includes('ลา') || v === 'ล') {
+            stColor = "#818cf8";
+            stBg = "rgba(99,102,241,0.1)";
+            stText = "ลา";
+          }
+
+          div.style.background = stBg;
+          div.innerHTML = `
+            <div style="color: var(--ink-dim); font-size: 10px;">${sess.date || sess.week}</div>
+            <div style="font-weight: 700; color: ${stColor}; margin-top: 2px;">${stText}</div>
+          `;
+          sessionsGrid.appendChild(div);
+        });
+
+        if (toggleBtn && sessionsContainer) {
+          toggleBtn.onclick = () => {
+            const isHidden = sessionsContainer.style.display === "none";
+            sessionsContainer.style.display = isHidden ? "block" : "none";
+            toggleBtn.textContent = isHidden ? "📅 ซ่อนรายละเอียดการเช็คชื่อ ▲" : "📅 ดูรายละเอียดการเช็คชื่อ ▼";
+          };
+        }
+      }
+    } else {
+      attSection.style.display = "none";
+    }
+  }
+
   // Individual assignments & quizzes.  A blank cell in the source sheet is
   // intentionally shown as "ยังไม่มีคะแนน" so students can follow up on work
   // that may not have been submitted or has not yet been marked.
