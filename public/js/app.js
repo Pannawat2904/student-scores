@@ -355,8 +355,48 @@ function renderResult(id, data) {
     </div>`;
   }).join('');
 
+  const renderTestUnits = (items) => {
+    const groups = {};
+    items.forEach(item => {
+      let name = item.displayName || item.name || '';
+      name = name.replace(/^(?:คะแนน(?:งาน|เก็บ|สอบ|ปฏิบัติ|รวม)|สอบ(?:ระหว่างเรียน|ย่อย)|แบบทดสอบ).*?(?:—\s*)/i, '');
+      name = name.replace(/(?:\s*—\s*[-_]*)+$/i, '').trim();
+      if (!name) name = item.displayName || item.name;
+
+      let unitName = 'แบบทดสอบทั่วไป';
+      const origUnitMatch = (item.displayName || item.name).match(/(หน่วย|บท)(?:ที่\s*)?(\d+)/i);
+      if (origUnitMatch) {
+        unitName = `${origUnitMatch[1]} ${origUnitMatch[2]}`;
+      }
+      
+      let shortName = name.replace(/^(หน่วย|บท)(?:ที่\s*)?\d+\s*—\s*/i, '');
+      if (!groups[unitName]) groups[unitName] = [];
+      groups[unitName].push({ ...item, cleanName: shortName });
+    });
+
+    return Object.keys(groups).map(unit => {
+      const rows = groups[unit].map(item => {
+        const missing = item.score === null || item.score === undefined || item.status === 'missing';
+        const score = missing ? '—' : round1(item.score);
+        const max = item.max === null || item.max === undefined ? '' : ` / ${round1(item.max)}`;
+        return `<div style="display:flex; justify-content:space-between; align-items:center; padding:12px 16px; border-top:1px solid var(--glass-border);">
+          <span style="font-size:13.5px; color:${missing ? 'var(--ink-dim)' : 'var(--ink)'};">${escapeHTML(item.cleanName)}</span>
+          <div style="display:flex; align-items:center; gap:8px;">
+            <span style="font-family:var(--f-mono); font-size:13px; font-weight:600; color:${missing ? 'var(--ink-faint)' : 'var(--ink)'};">${score}${max}</span>
+            <span class="pill ${missing ? 'status-missing' : 'status-ok'}">${missing ? 'ไม่มีคะแนน' : 'มีคะแนน'}</span>
+          </div>
+        </div>`;
+      }).join('');
+      
+      return `<div class="glass" style="padding:0; overflow:hidden;">
+        <div style="padding:14px 16px; background:#F8FAFC; font-weight:600; font-size:14px; color:var(--ink);">${escapeHTML(unit)}</div>
+        ${rows}
+      </div>`;
+    }).join('');
+  };
+
   const finalGrid = document.getElementById("final-grid");
-  unitGrid.innerHTML = testsWithUnitNames.length ? renderItems(testsWithUnitNames) : '<p class="empty-items">ไม่มีข้อมูลแบบทดสอบรายข้อ</p>';
+  unitGrid.innerHTML = testsWithUnitNames.length ? renderTestUnits(testsWithUnitNames) : '<p class="empty-items">ไม่มีข้อมูลแบบทดสอบรายข้อ</p>';
   itemGrid.innerHTML = works.length ? renderItems(works) : '<p class="empty-items">ไม่มีข้อมูลงานในชั้นเรียน</p>';
   if(finalGrid) finalGrid.innerHTML = finalParts.length ? renderItems(finalParts) : '<p class="empty-items">ไม่มีข้อมูลคะแนนสอบปลายภาค (ข้อกา/ข้อเขียน)</p>';
 
