@@ -75,6 +75,17 @@ const subjectFilter = document.getElementById("subject-filter");
 const statCount = document.getElementById("stat-count");
 const statAvg = document.getElementById("stat-avg");
 
+function updateDeleteSubjectBtn() {
+  const btn = document.getElementById("btn-delete-subject");
+  if (!btn) return;
+  if (subjectFilter.value) {
+    btn.style.display = "inline-flex";
+    btn.title = `ลบวิชา "${subjectFilter.value}" และข้อมูลคะแนนทั้งหมด`;
+  } else {
+    btn.style.display = "none";
+  }
+}
+
 function populateSubjectFilter() {
   const currentVal = subjectFilter.value;
   const subjects = [...new Set(students.map(s => s.subject))].filter(Boolean);
@@ -90,6 +101,7 @@ function populateSubjectFilter() {
   } else if (subjects.length > 0) {
     subjectFilter.value = subjects[0];
   }
+  updateDeleteSubjectBtn();
 }
 
 function renderTable() {
@@ -379,7 +391,57 @@ tbody.addEventListener("click", async (e) => {
 });
 
 searchInput.addEventListener("input", renderTable);
-subjectFilter.addEventListener("change", renderTable);
+subjectFilter.addEventListener("change", () => {
+  updateDeleteSubjectBtn();
+  renderTable();
+});
+
+const btnDeleteSubject = document.getElementById("btn-delete-subject");
+if (btnDeleteSubject) {
+  btnDeleteSubject.addEventListener("click", async () => {
+    const selectedSub = subjectFilter.value;
+    if (!selectedSub) return;
+    
+    const count = students.filter(s => s.subject === selectedSub).length;
+    const ok = confirm(
+      `⚠️ ยืนยันการลบวิชา "${selectedSub}" หรือไม่?\n\nการดำเนินการนี้จะลบข้อมูลคะแนนและรายชื่อนักเรียนทั้งหมด (${count} คน) ของวิชานี้ออกจากระบบถาวร`
+    );
+    if (!ok) return;
+
+    btnDeleteSubject.disabled = true;
+    try {
+      // 1. Delete scores for this subject
+      const res = await fetch(`/api/scores/subject/${encodeURIComponent(selectedSub)}`, {
+        method: 'DELETE',
+        credentials: 'same-origin'
+      });
+
+      // 2. Also remove from configs if exists
+      const confRes = await fetch('/api/config', { credentials: 'include' });
+      if (confRes.ok) {
+        const confs = await confRes.json();
+        const updatedConfs = confs.filter(c => c.subject !== selectedSub);
+        if (updatedConfs.length !== confs.length) {
+          await fetch('/api/config', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'include',
+            body: JSON.stringify(updatedConfs)
+          });
+        }
+      }
+
+      alert(`✅ ลบวิชา "${selectedSub}" และข้อมูลคะแนนเรียบร้อยแล้ว`);
+      subjectFilter.value = "";
+      await loadStudents();
+    } catch (err) {
+      console.error(err);
+      alert('เกิดข้อผิดพลาดในการลบวิชา: ' + err.message);
+    } finally {
+      btnDeleteSubject.disabled = false;
+    }
+  });
+}
 
 /* -------------------- upload modal -------------------- */
 const uploadOverlay = document.getElementById("upload-modal-overlay");
@@ -555,6 +617,24 @@ async function saveSyncSettings() {
     }
   });
 
+  // ตรวจหาว่ามีวิชาใดที่เคยมีอยู่ (ใน configs เดิม หรือในตารางคะแนน) แต่ถูกนำออกไปบ้าง
+  const prevSubjects = (currentConfigs || []).map(c => c.subject).filter(Boolean);
+  const existingScoreSubjects = (students || []).map(s => s.subject).filter(Boolean);
+  const allKnownSubjects = [...new Set([...prevSubjects, ...existingScoreSubjects])];
+  const newSubjectNames = newConfigs.map(c => c.subject);
+  const removedSubjects = allKnownSubjects.filter(sub => !newSubjectNames.includes(sub));
+
+  let deleteSubjects = [];
+  if (removedSubjects.length > 0) {
+    const listText = removedSubjects.map(s => `• ${s}`).join('\n');
+    const confirmed = confirm(
+      `⚠️ ตรวจพบว่าวิชาต่อไปนี้ถูกนำออกจากการตั้งค่า:\n\n${listText}\n\nคุณต้องการ "ลบข้อมูลคะแนนและรายชื่อนักเรียน" ของวิชาดังกล่าวออกจากฐานข้อมูลด้วยหรือไม่?\n\n- กด "ตกลง" (OK): เพื่อลบข้อมูลคะแนนของวิชาที่เอาออกทันที\n- กด "ยกเลิก" (Cancel): หากต้องการเก็บข้อมูลคะแนนไว้`
+    );
+    if (confirmed) {
+      deleteSubjects = removedSubjects;
+    }
+  }
+
   const btn = document.getElementById("sync-save-btn");
   btn.disabled = true;
   btn.textContent = "กำลังบันทึก...";
@@ -564,7 +644,10 @@ async function saveSyncSettings() {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       credentials: "include",
-      body: JSON.stringify(newConfigs)
+      body: JSON.stringify({
+        configs: newConfigs,
+        deleteSubjects: deleteSubjects
+      })
     });
     
     if (res.status === 401) {
@@ -574,8 +657,13 @@ async function saveSyncSettings() {
     }
     
     if (res.ok) {
-      alert("✅ บันทึกการตั้งค่าแล้ว");
+      if (deleteSubjects.length > 0) {
+        alert(`✅ บันทึกการตั้งค่าแล้ว และลบข้อมูลคะแนนของ ${deleteSubjects.length} วิชาที่นำออกเรียบร้อยแล้ว`);
+      } else {
+        alert("✅ บันทึกการตั้งค่าแล้ว");
+      }
       closeSyncSettings();
+      await loadStudents();
     } else {
       let msg = "บันทึกไม่สำเร็จ";
       try { const d = await res.json(); msg = d.error || msg; } catch(e) {}

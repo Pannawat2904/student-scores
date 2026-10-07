@@ -238,20 +238,48 @@ app.get('/api/config', async (req, res) => {
   res.json(data);
 });
 
-// POST /api/config - Save sync configurations (Expects array of configs)
+// POST /api/config - Save sync configurations
 app.post('/api/config', cookieAuth, async (req, res) => {
-  const configs = req.body;
-  if (!Array.isArray(configs)) return res.status(400).json({ error: 'Expected an array of configs' });
-  
+  let configs = [];
+  let deleteSubjects = [];
+
+  if (Array.isArray(req.body)) {
+    configs = req.body;
+  } else if (req.body && typeof req.body === 'object') {
+    configs = Array.isArray(req.body.configs) ? req.body.configs : [];
+    deleteSubjects = Array.isArray(req.body.deleteSubjects) ? req.body.deleteSubjects : [];
+  } else {
+    return res.status(400).json({ error: 'Expected an array of configs or { configs, deleteSubjects }' });
+  }
+
+  // Delete scores for removed subjects if requested
+  if (deleteSubjects.length > 0) {
+    const { error: delScoresErr } = await supabase
+      .from('scores')
+      .delete()
+      .in('subject', deleteSubjects);
+    if (delScoresErr) {
+      console.error('[Config] Error deleting scores for removed subjects:', delScoresErr);
+    }
+  }
+
   // First, delete all existing configs (simple replacement strategy)
   await supabase.from('configs').delete().neq('subject', 'xxxxxx');
-  
+
   if (configs.length > 0) {
     const { error } = await supabase.from('configs').insert(configs);
     if (error) return res.status(500).json({ error: error.message });
   }
-  
-  res.json({ success: true, message: 'Config saved' });
+
+  res.json({ success: true, message: 'Config saved', deletedSubjects });
+});
+
+// DELETE /api/scores/subject/:subject - Delete all scores for a specific subject
+app.delete('/api/scores/subject/:subject', cookieAuth, async (req, res) => {
+  const subject = decodeURIComponent(req.params.subject);
+  const { error } = await supabase.from('scores').delete().eq('subject', subject);
+  if (error) return res.status(500).json({ error: error.message });
+  res.json({ success: true, message: `All scores for ${subject} deleted` });
 });
 
 // CSV Parsing Helpers
