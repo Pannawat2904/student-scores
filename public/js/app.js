@@ -43,6 +43,7 @@ const resultView = document.getElementById("result-view");
 
 document.getElementById("back-btn").addEventListener("click", (e) => {
   e.preventDefault();
+  localStorage.removeItem('student_session');
   resultView.classList.remove("show");
   searchView.classList.remove("hide");
   document.querySelector('.admin-login-btn').style.display = '';
@@ -68,7 +69,21 @@ async function loadSubjects() {
     console.error("Error loading subjects:", err);
   }
 }
-loadSubjects();
+loadSubjects().then(() => {
+  const sessionStr = localStorage.getItem('student_session');
+  if (sessionStr) {
+    try {
+      const session = JSON.parse(sessionStr);
+      if (Date.now() - session.timestamp < 30 * 60 * 1000) {
+        input.value = session.id;
+        subjectFilter.value = session.subject;
+        form.dispatchEvent(new Event('submit'));
+      } else {
+        localStorage.removeItem('student_session');
+      }
+    } catch(e){}
+  }
+});
 
 function setLoading(isLoading) {
   submitBtn.disabled = isLoading;
@@ -291,7 +306,7 @@ function renderResult(id, data) {
   const assignments = Array.isArray(data.assignments) ? data.assignments : [];
   const isSummaryOrNote = (name) => {
     if (/ข้อกา|ข้อเขียน|ปรนัย|อัตนัย/.test(name)) return false;
-    return /คะแนนเก็บ|คะแนนระหว่างเรียน|คะแนนรวม|รวมคะแนน|จิตพิสัย|ปลายภาค|เกรด|หมายเหตุ|^รวม(?:\s|$)/.test(name || '');
+    return /คะแนนเก็บ|คะแนนระหว่างเรียน|คะแนนรวม|รวมคะแนน|รวมทดสอบ|รวมงาน|รวมจิตพิสัย|รวมทั้งสิ้น|จิตพิสัย|ปลายภาค|เกรด|หมายเหตุ|^รวม(?:\s|$)|ซื่อสัตย์|รับผิดชอบ|ใฝ่รู้|เข้าเรียน|ปฏิบัติ|วินัย|คุณลักษณะ|สมรรถนะ|เวลาเรียน|มาเรียน|ขาด|ลา|สาย/.test(name || '');
   };
   const isFinalPart = (item) => /ข้อกา|ข้อเขียน|ปรนัย|อัตนัย/i.test(item.name || '');
   const isTest = (item) => !isFinalPart(item) && (item.type === 'test' || /ทดสอบ|แบบสอบ|ข้อสอบ|สอบย่อย|quiz|(?:^|—\s*)(?:ก่อน|หลัง)\s*\d+\s*(?:ข้อ|คะแนน)?/i.test(item.name || ''));
@@ -376,6 +391,9 @@ form.addEventListener("submit", async (e) => {
     errorMsg.classList.add("show");
     return;
   }
+
+  // Save session
+  localStorage.setItem('student_session', JSON.stringify({ id, subject, timestamp: Date.now() }));
 
   renderResult(id, data);
 });
