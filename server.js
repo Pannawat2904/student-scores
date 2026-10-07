@@ -329,7 +329,7 @@ app.post('/api/config', cookieAuth, async (req, res) => {
     if (error) return res.status(500).json({ error: error.message });
   }
 
-  res.json({ success: true, message: 'Config saved', deletedSubjects });
+  res.json({ success: true, message: 'Config saved', deleteSubjects });
 });
 
 // POST /api/config/toggle-jit - Quick toggle for jit score visibility for a subject
