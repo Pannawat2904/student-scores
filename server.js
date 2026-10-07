@@ -190,7 +190,10 @@ app.get('/api/scores/:id', async (req, res) => {
 
     // Check if jit should be shown to student
     const cookies = parseCookies(req);
-    const isAdmin = cookies.admin_session === ADMIN_SESSION_SECRET;
+    const adminUser = process.env.ADMIN_USER || 'admin';
+    const adminPass = process.env.ADMIN_PASS || 'password';
+    const expectedToken = Buffer.from(`${adminUser}:${adminPass}`).toString('base64');
+    const isAdmin = cookies.admin_token === expectedToken;
 
     if (!isAdmin && student.subject) {
       const { data: confData } = await supabase
