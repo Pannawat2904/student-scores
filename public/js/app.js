@@ -185,33 +185,7 @@ function renderResult(id, data) {
     sumGrade.style.color = gc.fg;
   }
 
-  // Quick Switch for students enrolled in other subjects
-  const qsContainer = document.getElementById("quick-switch-container");
-  const qsButtons = document.getElementById("quick-switch-buttons");
-  if (qsContainer && qsButtons) {
-    if (data.other_subjects && data.other_subjects.length > 0) {
-      qsButtons.innerHTML = '';
-      data.other_subjects.forEach(otherSub => {
-        const btn = document.createElement("button");
-        btn.type = "button";
-        btn.className = "btn btn--ghost";
-        btn.style.cssText = "font-size: 12px; padding: 4px 10px; background: rgba(99,102,241,0.15); border-color: rgba(99,102,241,0.3); color: #818cf8; cursor: pointer;";
-        btn.innerHTML = `👉 ดูวิชา <strong>${otherSub}</strong>`;
-        btn.addEventListener("click", async () => {
-          subjectFilter.value = otherSub;
-          const scoreData = await fetchStudentScore(id, otherSub);
-          if (scoreData) {
-            renderResult(id, scoreData);
-            window.scrollTo({ top: 0, behavior: 'smooth' });
-          }
-        });
-        qsButtons.appendChild(btn);
-      });
-      qsContainer.style.display = "flex";
-    } else {
-      qsContainer.style.display = "none";
-    }
-  }
+
 
   // Attendance rendering
   const attSection = document.getElementById("section-attendance");
