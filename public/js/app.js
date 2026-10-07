@@ -309,7 +309,7 @@ function renderResult(id, data) {
     return /คะแนนเก็บ|คะแนนระหว่างเรียน|คะแนนรวม|รวมคะแนน|รวมทดสอบ|รวมงาน|รวมจิตพิสัย|รวมทั้งสิ้น|จิตพิสัย|ปลายภาค|เกรด|หมายเหตุ|^รวม(?:\s|$)|ซื่อสัตย์|รับผิดชอบ|ใฝ่รู้|เข้าเรียน|ปฏิบัติ|วินัย|คุณลักษณะ|สมรรถนะ|เวลาเรียน|มาเรียน|ขาด|ลา|สาย/.test(name || '');
   };
   const isFinalPart = (item) => /ข้อกา|ข้อเขียน|ปรนัย|อัตนัย/i.test(item.name || '');
-  const isTest = (item) => !isFinalPart(item) && (item.type === 'test' || /ทดสอบ|แบบสอบ|ข้อสอบ|สอบย่อย|quiz|(?:^|—\s*)(?:ก่อน|หลัง)\s*\d+\s*(?:ข้อ|คะแนน)?/i.test(item.name || ''));
+  const isTest = (item) => !isFinalPart(item) && (item.type === 'test' || /ทดสอบ|แบบสอบ|ข้อสอบ|สอบย่อย|quiz|หน่วย|บท|(?:^|—\s*)(?:ก่อน|หลัง)/i.test(item.name || ''));
   // Filter on the page too, so existing records immediately stop showing
   // summary columns even before the next data sync replaces them.
   const visibleItems = assignments.filter(item => !isSummaryOrNote(item.name));
@@ -364,12 +364,12 @@ function renderResult(id, data) {
       if (!name) name = item.displayName || item.name;
 
       let unitName = 'แบบทดสอบทั่วไป';
-      const origUnitMatch = (item.displayName || item.name).match(/(หน่วย|บท)(?:ที่\s*)?(\d+)/i);
+      const origUnitMatch = (item.displayName || item.name).match(/(หน่วย|บท).*?(\d+)/i);
       if (origUnitMatch) {
-        unitName = `${origUnitMatch[1]} ${origUnitMatch[2]}`;
+        unitName = `แบบทดสอบ${origUnitMatch[1]}ที่ ${origUnitMatch[2]}`;
       }
       
-      let shortName = name.replace(/^(หน่วย|บท)(?:ที่\s*)?\d+\s*—\s*/i, '');
+      let shortName = name.replace(/^(หน่วย|บท).*?\d+\s*—\s*/i, '');
       if (!groups[unitName]) groups[unitName] = [];
       groups[unitName].push({ ...item, cleanName: shortName });
     });
@@ -388,7 +388,7 @@ function renderResult(id, data) {
         </div>`;
       }).join('');
       
-      return `<div class="glass" style="padding:0; overflow:hidden;">
+      return `<div class="glass" style="padding:0; overflow:hidden; margin-bottom:14px;">
         <div style="padding:14px 16px; background:#F8FAFC; font-weight:600; font-size:14px; color:var(--ink);">${escapeHTML(unit)}</div>
         ${rows}
       </div>`;
