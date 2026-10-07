@@ -480,7 +480,8 @@ function processCSVContent(content, subject) {
   // by name as well as by its detected summary column.
   const isSummaryOrNote = (name) => {
     if (/ข้อกา|ข้อเขียน|ปรนัย|อัตนัย/.test(name)) return false;
-    return /คะแนนเก็บ|คะแนนระหว่างเรียน|คะแนนรวม|รวมคะแนน|รวมทดสอบ|รวมงาน|รวมจิตพิสัย|รวมทั้งสิ้น|จิตพิสัย|ปลายภาค|เกรด|หมายเหตุ|^รวม(?:\s|$)/.test(name);
+    // Exclude summary columns, notes, and affective domain (จิตพิสัย) / behavioral criteria
+    return /คะแนนเก็บ|คะแนนระหว่างเรียน|คะแนนรวม|รวมคะแนน|รวมทดสอบ|รวมงาน|รวมจิตพิสัย|รวมทั้งสิ้น|จิตพิสัย|ปลายภาค|เกรด|หมายเหตุ|^รวม(?:\s|$)|ซื่อสัตย์|รับผิดชอบ|ใฝ่รู้|เข้าเรียน|ปฏิบัติ|วินัย|คุณลักษณะ|สมรรถนะ|เวลาเรียน|มาเรียน|ขาด|ลา|สาย/.test(name);
   };
   const assignmentColumns = columnHeaders
     .map((name, index) => ({ name, index }))
