@@ -69,7 +69,7 @@
         </svg>
         <div class="dial-center">
           <span class="dial-total" id="dial-total">0</span>
-          <span class="dial-sub">/ 100</span>
+          <span class="dial-sub" id="dial-sub">/ 100</span>
         </div>
       </div>
     </section>
@@ -163,7 +163,8 @@
         <div class="summary-foot">
           <div>
             <p class="tl">คะแนนรวมทั้งหมด</p>
-            <p class="tn"><span id="sum-total">0</span><span style="font-size:16px; color:var(--ink-dim);"> /100</span></p>
+            <p class="tn"><span id="sum-total">0</span><span id="sum-total-max" style="font-size:16px; color:var(--ink-dim);"> /100</span></p>
+            <p id="sum-jit-note" style="display:none; font-size:12px; color:var(--gold-soft); margin:4px 0 0 0;">* ยังไม่รวมคะแนนจิตพิสัย (รอเปิดเผยตอนสรุปคะแนนปลายภาค)</p>
           </div>
         </div>
       </div>
@@ -172,6 +173,6 @@
   </div>
 </div>
 
-<script src="js/app.js?v=15"></script>
+<script src="js/app.js?v=16"></script>
 </body>
 </html>

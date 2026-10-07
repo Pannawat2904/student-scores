@@ -35,12 +35,16 @@
   </header>
 
   <div class="admin-toolbar glass--flat">
-    <div style="display: flex; gap: 10px; flex: 1; max-width: 700px; align-items: center;">
+    <div style="display: flex; gap: 10px; flex: 1; max-width: 820px; align-items: center; flex-wrap: wrap;">
       <select class="field" id="subject-filter" style="width: 240px; cursor: pointer;">
         <option value="">-- ทุกวิชา --</option>
       </select>
+      <button class="btn btn--ghost" id="btn-toggle-jit" title="คลิกเพื่อสลับ เปิด/ปิด การแสดงคะแนนจิตพิสัยให้นักเรียนเห็น" style="display: none; padding: 0 12px; white-space: nowrap; height: 38px; font-size: 13px; align-items: center; gap: 6px; cursor: pointer;">
+        <span id="jit-toggle-icon">🔒</span>
+        <span id="jit-toggle-text">จิตพิสัย: ซ่อนจากนักเรียน</span>
+      </button>
       <button class="btn btn--ghost" id="btn-delete-subject" title="ลบวิชานี้และข้อมูลคะแนนทั้งหมด" style="display: none; color: var(--rose); border-color: rgba(239,68,68,0.3); padding: 0 10px; white-space: nowrap; height: 38px; font-size: 13px;">🗑 ลบวิชานี้</button>
-      <input class="field" id="search-input" type="text" placeholder="ค้นหาชื่อหรือรหัสนักเรียน" style="flex: 1;">
+      <input class="field" id="search-input" type="text" placeholder="ค้นหาชื่อหรือรหัสนักเรียน" style="flex: 1; min-width: 180px;">
     </div>
     <div class="admin-stats">
       <div class="admin-stat">
@@ -70,7 +74,12 @@
             <th>นักเรียน</th>
             <th style="text-align:right">งาน (30)</th>
             <th style="text-align:right">ระหว่างเรียน (20)</th>
-            <th style="text-align:right">จิตพิสัย (20)</th>
+            <th style="text-align:right" id="th-jit-col">
+              <div style="display: inline-flex; align-items: center; justify-content: flex-end; gap: 4px;">
+                <span>จิตพิสัย (20)</span>
+                <button id="th-jit-quick-btn" title="คลิกเพื่อเปิด/ปิดการแสดงคะแนนจิตพิสัยให้นักเรียน" style="display: none; border: none; background: rgba(245,158,11,0.15); color: var(--gold-soft); padding: 2px 6px; border-radius: 4px; font-size: 11px; cursor: pointer; font-weight: 500;">🔒 ซ่อน</button>
+              </div>
+            </th>
             <th style="text-align:right">ปลายภาค (30)</th>
             <th style="text-align:right">รวม (100)</th>
             <th></th>
@@ -212,6 +221,6 @@
 
 
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-  <script src="js/admin.js?v=14"></script>
+  <script src="js/admin.js?v=15"></script>
 </body>
 </html>

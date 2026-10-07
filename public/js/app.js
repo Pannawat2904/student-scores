@@ -80,14 +80,22 @@ function round1(n) {
 }
 
 function renderResult(id, data) {
-  const total = round1((data.work||0) + (data.mid||0) + (data.jit||0) + (data.final||0));
-  const grade = computeGrade(total);
-  const gc = gradeClass(grade);
+  const isJitHidden = data.show_jit === false || data.jit === null || data.jit === undefined;
+  const total = isJitHidden
+    ? round1((data.work||0) + (data.mid||0) + (data.final||0))
+    : round1((data.work||0) + (data.mid||0) + (data.jit||0) + (data.final||0));
+
+  const grade = isJitHidden ? "-" : computeGrade(total);
+  const gc = isJitHidden 
+    ? { bg: "rgba(245, 158, 11, 0.15)", fg: "var(--gold-soft)" } 
+    : gradeClass(grade);
 
   // Topbar
   document.getElementById("tb-name").textContent = data.name;
   document.getElementById("tb-code").textContent = id;
-  document.getElementById("tb-total").textContent = `รวม ${total} / 100`;
+  document.getElementById("tb-total").textContent = isJitHidden 
+    ? `รวม ${total} / 80 (รอจิตพิสัย)` 
+    : `รวม ${total} / 100`;
 
   // Hero
   const heroSub = document.getElementById("hero-subject");
@@ -98,28 +106,34 @@ function renderResult(id, data) {
 
   const dialGrade = document.getElementById("dial-grade");
   if (dialGrade) {
-    dialGrade.textContent = `เกรด ${grade}`;
+    dialGrade.textContent = isJitHidden ? `รอสรุปจิตพิสัย` : `เกรด ${grade}`;
     dialGrade.style.background = gc.bg;
     dialGrade.style.color = gc.fg;
   }
 
   document.getElementById("dial-total").textContent = total;
+  const dialSub = document.getElementById("dial-sub");
+  if (dialSub) dialSub.textContent = isJitHidden ? "/ 80*" : "/ 100";
+
+  const maxTotalForDial = isJitHidden ? 80 : 100;
   const circumference = 283;
-  const offset = circumference - (Math.min(total, 100) / 100) * circumference;
+  const offset = circumference - (Math.min(total, maxTotalForDial) / maxTotalForDial) * circumference;
   requestAnimationFrame(() => {
     const dial = document.getElementById("dial-fill");
     if (dial) {
       dial.style.strokeDashoffset = offset;
-      dial.style.stroke = total >= 50 ? "var(--mint)" : "var(--rose)";
+      dial.style.stroke = total >= (maxTotalForDial / 2) ? "var(--mint)" : "var(--rose)";
     }
   });
 
-  // Metrics
-  ["work", "mid", "jit", "final"].forEach(key => {
+  // Metrics for work, mid, final
+  ["work", "mid", "final"].forEach(key => {
     const val = data[key] || 0;
     const max = MAX[key];
-    document.getElementById(`m-${key}`).textContent = round1(val);
-    document.getElementById(`sv-${key}`).textContent = `${round1(val)} / ${max}`;
+    const mElem = document.getElementById(`m-${key}`);
+    const svElem = document.getElementById(`sv-${key}`);
+    if (mElem) mElem.textContent = round1(val);
+    if (svElem) svElem.textContent = `${round1(val)} / ${max}`;
     const pct = Math.min(100, (val / max) * 100);
     requestAnimationFrame(() => {
       const mf = document.getElementById(`mf-${key}`);
@@ -129,10 +143,44 @@ function renderResult(id, data) {
     });
   });
 
+  // JIT Metric Handling
+  const mJit = document.getElementById("m-jit");
+  const svJit = document.getElementById("sv-jit");
+  const mfJit = document.getElementById("mf-jit");
+  const sfJit = document.getElementById("sf-jit");
+
+  if (isJitHidden) {
+    if (mJit) {
+      mJit.innerHTML = `<span style="font-size: 15px; font-weight: 500; color: var(--gold-soft);">🔒 รอสรุปปลายภาค</span>`;
+    }
+    if (svJit) {
+      svJit.innerHTML = `<span style="color: var(--gold-soft); font-size: 12px;">🔒 รอสรุปปลายภาค (เต็ม 20)</span>`;
+    }
+    if (mfJit) mfJit.style.width = "0%";
+    if (sfJit) sfJit.style.width = "0%";
+  } else {
+    const val = data.jit || 0;
+    const max = MAX.jit;
+    if (mJit) mJit.textContent = round1(val);
+    if (svJit) svJit.textContent = `${round1(val)} / ${max}`;
+    const pct = Math.min(100, (val / max) * 100);
+    requestAnimationFrame(() => {
+      if (mfJit) mfJit.style.width = pct + "%";
+      if (sfJit) sfJit.style.width = pct + "%";
+    });
+  }
+
+  // Summary Totals
   document.getElementById("sum-total").textContent = total;
+  const sumTotalMax = document.getElementById("sum-total-max");
+  if (sumTotalMax) sumTotalMax.textContent = isJitHidden ? " / 80" : " / 100";
+
+  const sumJitNote = document.getElementById("sum-jit-note");
+  if (sumJitNote) sumJitNote.style.display = isJitHidden ? "block" : "none";
+
   const sumGrade = document.getElementById("sum-grade");
   if (sumGrade) {
-    sumGrade.textContent = `เกรด ${grade}`;
+    sumGrade.textContent = isJitHidden ? `รอสรุปปลายภาค` : `เกรด ${grade}`;
     sumGrade.style.background = gc.bg;
     sumGrade.style.color = gc.fg;
   }

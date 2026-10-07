@@ -173,7 +173,7 @@ app.get('/api/scores/:id', async (req, res) => {
   if (error) return res.status(500).json({ error: error.message });
   
   if (data && data.length > 0) {
-    const student = data[0];
+    const student = { ...data[0] };
     // Log access to login_history
     supabase.from('login_history').insert({
       student_id: student.id,
@@ -182,6 +182,29 @@ app.get('/api/scores/:id', async (req, res) => {
     }).then(({ error }) => {
       if (error) console.error("Error logging history:", error.message);
     });
+
+    // Check if jit should be shown to student
+    const cookies = parseCookies(req);
+    const isAdmin = cookies.admin_session === ADMIN_SESSION_SECRET;
+
+    if (!isAdmin && student.subject) {
+      const { data: confData } = await supabase
+        .from('configs')
+        .select('jit_config')
+        .eq('subject', student.subject)
+        .maybeSingle();
+
+      const showToStudents = confData?.jit_config?.show_to_students === true;
+      if (!showToStudents) {
+        student.show_jit = false;
+        student.jit = null; // Mask jit score from student
+        student.total = (student.work || 0) + (student.mid || 0) + (student.final || 0);
+      } else {
+        student.show_jit = true;
+      }
+    } else {
+      student.show_jit = true;
+    }
 
     res.json(student); // Return the first match if multiple
   } else {
@@ -267,11 +290,55 @@ app.post('/api/config', cookieAuth, async (req, res) => {
   await supabase.from('configs').delete().neq('subject', 'xxxxxx');
 
   if (configs.length > 0) {
-    const { error } = await supabase.from('configs').insert(configs);
+    const formattedConfigs = configs.map(c => ({
+      subject: c.subject,
+      url: c.url,
+      jit_config: c.jit_config || { show_to_students: c.show_to_students === true }
+    }));
+    const { error } = await supabase.from('configs').insert(formattedConfigs);
     if (error) return res.status(500).json({ error: error.message });
   }
 
   res.json({ success: true, message: 'Config saved', deletedSubjects });
+});
+
+// POST /api/config/toggle-jit - Quick toggle for jit score visibility for a subject
+app.post('/api/config/toggle-jit', cookieAuth, async (req, res) => {
+  const { subject, show_to_students } = req.body;
+  if (!subject) return res.status(400).json({ error: 'Subject is required' });
+
+  const { data: conf, error: findErr } = await supabase
+    .from('configs')
+    .select('*')
+    .eq('subject', subject)
+    .maybeSingle();
+
+  if (findErr) return res.status(500).json({ error: findErr.message });
+
+  const currentJitConfig = conf?.jit_config || {};
+  const willShow = typeof show_to_students === 'boolean' 
+    ? show_to_students 
+    : !(currentJitConfig.show_to_students === true);
+
+  const newJitConfig = {
+    ...currentJitConfig,
+    show_to_students: willShow
+  };
+
+  if (conf) {
+    const { error: updateErr } = await supabase
+      .from('configs')
+      .update({ jit_config: newJitConfig })
+      .eq('subject', subject);
+    if (updateErr) return res.status(500).json({ error: updateErr.message });
+  } else {
+    const { error: insErr } = await supabase
+      .from('configs')
+      .upsert({ subject, url: '', jit_config: newJitConfig });
+    if (insErr) return res.status(500).json({ error: insErr.message });
+  }
+
+  res.json({ success: true, subject, show_to_students: willShow });
 });
 
 // DELETE /api/scores/subject/:subject - Delete all scores for a specific subject

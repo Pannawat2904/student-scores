@@ -26,8 +26,20 @@ function updateStudentRollNumbers() {
   });
 }
 
+async function loadConfigs() {
+  try {
+    const res = await fetch('/api/config', { credentials: 'include' });
+    if (res.ok) {
+      currentConfigs = await res.json();
+    }
+  } catch (err) {
+    console.error('Failed to load configs:', err);
+  }
+}
+
 async function loadStudents() {
   try {
+    await loadConfigs();
     const res = await fetch('/api/scores');
     if (res.ok) {
       students = await res.json();
@@ -75,14 +87,63 @@ const subjectFilter = document.getElementById("subject-filter");
 const statCount = document.getElementById("stat-count");
 const statAvg = document.getElementById("stat-avg");
 
-function updateDeleteSubjectBtn() {
-  const btn = document.getElementById("btn-delete-subject");
-  if (!btn) return;
-  if (subjectFilter.value) {
-    btn.style.display = "inline-flex";
-    btn.title = `ลบวิชา "${subjectFilter.value}" และข้อมูลคะแนนทั้งหมด`;
+function updateSubjectActionButtons() {
+  const selectedSub = subjectFilter.value;
+  const btnDel = document.getElementById("btn-delete-subject");
+  const btnJit = document.getElementById("btn-toggle-jit");
+  const thJitBtn = document.getElementById("th-jit-quick-btn");
+
+  if (btnDel) {
+    if (selectedSub) {
+      btnDel.style.display = "inline-flex";
+      btnDel.title = `ลบวิชา "${selectedSub}" และข้อมูลคะแนนทั้งหมด`;
+    } else {
+      btnDel.style.display = "none";
+    }
+  }
+
+  if (selectedSub) {
+    const conf = currentConfigs.find(c => c.subject === selectedSub);
+    const isShowing = conf?.jit_config?.show_to_students === true;
+
+    if (btnJit) {
+      btnJit.style.display = "inline-flex";
+      const icon = document.getElementById("jit-toggle-icon");
+      const text = document.getElementById("jit-toggle-text");
+      if (isShowing) {
+        if (icon) icon.textContent = "👁️";
+        if (text) text.textContent = "จิตพิสัย: แสดงให้นักเรียน";
+        btnJit.style.borderColor = "rgba(16, 185, 129, 0.4)";
+        btnJit.style.color = "var(--mint)";
+        btnJit.style.background = "rgba(16, 185, 129, 0.08)";
+        btnJit.title = `คลิกเพื่อ ซ่อน คะแนนจิตพิสัยวิชา "${selectedSub}" ไม่ให้นักเรียนเห็น`;
+      } else {
+        if (icon) icon.textContent = "🔒";
+        if (text) text.textContent = "จิตพิสัย: ซ่อนจากนักเรียน";
+        btnJit.style.borderColor = "rgba(245, 158, 11, 0.4)";
+        btnJit.style.color = "var(--gold-soft)";
+        btnJit.style.background = "rgba(245, 158, 11, 0.08)";
+        btnJit.title = `คลิกเพื่อ เปิดเผย คะแนนจิตพิสัยวิชา "${selectedSub}" ให้นักเรียนเห็น`;
+      }
+    }
+
+    if (thJitBtn) {
+      thJitBtn.style.display = "inline-block";
+      if (isShowing) {
+        thJitBtn.textContent = "👁️ แสดงให้นักเรียน";
+        thJitBtn.style.color = "var(--mint)";
+        thJitBtn.style.background = "rgba(16, 185, 129, 0.2)";
+        thJitBtn.title = "สถานะ: เปิดให้นักเรียนเห็นแล้ว (คลิกเพื่อซ่อน)";
+      } else {
+        thJitBtn.textContent = "🔒 ซ่อนจากนักเรียน";
+        thJitBtn.style.color = "var(--gold-soft)";
+        thJitBtn.style.background = "rgba(245, 158, 11, 0.2)";
+        thJitBtn.title = "สถานะ: กำลังซ่อนจากนักเรียน (คลิกเพื่อเปิด)";
+      }
+    }
   } else {
-    btn.style.display = "none";
+    if (btnJit) btnJit.style.display = "none";
+    if (thJitBtn) thJitBtn.style.display = "none";
   }
 }
 
@@ -101,7 +162,7 @@ function populateSubjectFilter() {
   } else if (subjects.length > 0) {
     subjectFilter.value = subjects[0];
   }
-  updateDeleteSubjectBtn();
+  updateSubjectActionButtons();
 }
 
 function renderTable() {
@@ -392,9 +453,65 @@ tbody.addEventListener("click", async (e) => {
 
 searchInput.addEventListener("input", renderTable);
 subjectFilter.addEventListener("change", () => {
-  updateDeleteSubjectBtn();
+  updateSubjectActionButtons();
   renderTable();
 });
+
+async function toggleJitVisibility(subject) {
+  if (!subject) return;
+  const conf = currentConfigs.find(c => c.subject === subject);
+  const currentlyShowing = conf?.jit_config?.show_to_students === true;
+  const targetShowing = !currentlyShowing;
+
+  const confirmMsg = targetShowing
+    ? `ต้องการ "เปิดเผย" คะแนนจิตพิสัยของวิชา "${subject}" ให้นักเรียนเห็นใช่หรือไม่?\n\n(ควรเปิดเมื่อสรุปคะแนนปลายภาคเรียบร้อยแล้ว)`
+    : `ต้องการ "ซ่อน" คะแนนจิตพิสัยของวิชา "${subject}" ไม่ให้นักเรียนเห็นใช่หรือไม่?\n\n(นักเรียนจะเห็นสถานะเป็น "รอสรุปปลายภาค" และคะแนนรวมจะไม่ถูกนำจิตพิสัยมารวม)`;
+
+  if (!confirm(confirmMsg)) return;
+
+  try {
+    const res = await fetch("/api/config/toggle-jit", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      body: JSON.stringify({ subject, show_to_students: targetShowing })
+    });
+
+    if (res.ok) {
+      let existing = currentConfigs.find(c => c.subject === subject);
+      if (!existing) {
+        existing = { subject, url: '', jit_config: {} };
+        currentConfigs.push(existing);
+      }
+      existing.jit_config = { ...existing.jit_config, show_to_students: targetShowing };
+
+      updateSubjectActionButtons();
+      alert(targetShowing 
+        ? `✅ เปิดแสดงคะแนนจิตพิสัยวิชา "${subject}" ให้นักเรียนเห็นแล้ว` 
+        : `🔒 ซ่อนคะแนนจิตพิสัยวิชา "${subject}" จากนักเรียนเรียบร้อยแล้ว`);
+    } else {
+      alert("ไม่สามารถเปลี่ยนสถานะได้ กรุณาลองใหม่อีกครั้ง");
+    }
+  } catch (err) {
+    console.error(err);
+    alert("เกิดข้อผิดพลาด: " + err.message);
+  }
+}
+
+const btnToggleJit = document.getElementById("btn-toggle-jit");
+if (btnToggleJit) {
+  btnToggleJit.addEventListener("click", () => {
+    toggleJitVisibility(subjectFilter.value);
+  });
+}
+
+const thJitQuickBtn = document.getElementById("th-jit-quick-btn");
+if (thJitQuickBtn) {
+  thJitQuickBtn.addEventListener("click", (e) => {
+    e.stopPropagation();
+    toggleJitVisibility(subjectFilter.value);
+  });
+}
 
 const btnDeleteSubject = document.getElementById("btn-delete-subject");
 if (btnDeleteSubject) {
@@ -577,11 +694,12 @@ function renderConfigs() {
   }
   
   currentConfigs.forEach((c) => {
-    addConfigRow(c.subject, c.url);
+    const isShowing = c.jit_config?.show_to_students === true;
+    addConfigRow(c.subject, c.url, isShowing);
   });
 }
 
-function addConfigRow(subject = '', url = '') {
+function addConfigRow(subject = '', url = '', showToStudents = false) {
   const container = document.getElementById("sync-configs-container");
   const div = document.createElement("div");
   div.className = "field-group";
@@ -596,6 +714,10 @@ function addConfigRow(subject = '', url = '') {
         <input type="text" class="field config-url" placeholder="วางลิงก์ Google Sheets..." value="${url}" style="flex: 1; font-size: 13px;">
         <button type="button" class="btn btn--ghost" style="color:var(--rose); padding: 0 12px; border: 1px solid rgba(239,68,68,0.2);" aria-label="ลบ" onclick="this.parentElement.parentElement.parentElement.remove()">🗑</button>
       </div>
+      <label style="display: inline-flex; align-items: center; gap: 8px; margin-top: 4px; font-size: 13px; cursor: pointer; color: var(--ink-dim); user-select: none;">
+        <input type="checkbox" class="config-show-jit" ${showToStudents ? 'checked' : ''} style="cursor: pointer; width: 16px; height: 16px; accent-color: var(--mint);">
+        <span>👁️ เปิดให้นักเรียนเห็นคะแนนจิตพิสัย (ติ๊กเมื่อสรุปคะแนนปลายภาค)</span>
+      </label>
     </div>
   `;
   container.appendChild(div);
@@ -609,11 +731,16 @@ async function saveSyncSettings() {
   rows.forEach(r => {
     const subject = r.querySelector(".config-subject").value.trim();
     let url = r.querySelector(".config-url").value.trim();
+    const showToStudents = r.querySelector(".config-show-jit")?.checked === true;
     if (subject && url) {
       if (url.includes('/edit')) {
         url = url.replace(/\/edit.*$/, '/export?format=csv');
       }
-      newConfigs.push({ subject, url });
+      newConfigs.push({ 
+        subject, 
+        url,
+        jit_config: { show_to_students: showToStudents }
+      });
     }
   });
 
