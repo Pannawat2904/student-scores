@@ -466,11 +466,11 @@ function processCSVContent(content, subject) {
   for (let r = 0; r <= subHeaderIndex; r++) {
     for (let c = 5; c < records[r].length; c++) {
       const h = (records[r][c] || '').trim();
-      if (h.includes('คะแนนเก็บ')) workCol = c;
-      if (h.includes('ระหว่างเรียน')) midCol = c;
+      if (h.includes('คะแนนเก็บ') || h.includes('รวมงาน')) workCol = c;
+      if (h.includes('ระหว่างเรียน') || h.includes('รวมทดสอบ')) midCol = c;
       if (h.includes('จิตพิสัย') && jitCol === -1) jitCol = c;
-      if (h.includes('ปลายภาค')) finalCol = c;
-      if (h.includes('คะแนนรวม')) totalCol = c;
+      if (h.includes('ปลายภาค') || h.includes('รวมปลายภาค')) finalCol = c;
+      if (h.includes('คะแนนรวม') || h.includes('รวมทั้งสิ้น')) totalCol = c;
     }
   }
 
@@ -480,7 +480,7 @@ function processCSVContent(content, subject) {
   // by name as well as by its detected summary column.
   const isSummaryOrNote = (name) => {
     if (/ข้อกา|ข้อเขียน|ปรนัย|อัตนัย/.test(name)) return false;
-    return /คะแนนเก็บ|คะแนนระหว่างเรียน|คะแนนรวม|รวมคะแนน|จิตพิสัย|ปลายภาค|เกรด|หมายเหตุ|^รวม(?:\s|$)/.test(name);
+    return /คะแนนเก็บ|คะแนนระหว่างเรียน|คะแนนรวม|รวมคะแนน|รวมทดสอบ|รวมงาน|รวมจิตพิสัย|รวมทั้งสิ้น|จิตพิสัย|ปลายภาค|เกรด|หมายเหตุ|^รวม(?:\s|$)/.test(name);
   };
   const assignmentColumns = columnHeaders
     .map((name, index) => ({ name, index }))
