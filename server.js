@@ -485,9 +485,9 @@ function processCSVContent(content, subject) {
   };
   const assignmentColumns = columnHeaders
     .map((name, index) => ({ name, index }))
-    // Columns 0–4 contain row number and student details in the supported export.
-    .filter(({ name, index }) => index >= 5 && name && !summaryColumns.has(index) && !isSummaryOrNote(name))
-    .filter(({ name }) => !/^(ลำดับ|รหัส|ชื่อ|นามสกุล|ห้อง|ชั้น|กลุ่ม|เลขที่)(\s|$)/.test(name));
+    // Columns 0–3 contain row number and student details in the supported export.
+    .filter(({ name, index }) => index >= 4 && name && !summaryColumns.has(index) && !isSummaryOrNote(name))
+    .filter(({ name }) => !/^(ลำดับ|รหัส|ชื่อ|นามสกุล|ชื่อเล่น|ห้อง|ชั้น|กลุ่ม|เลขที่)(\s|$)/.test(name));
 
   const parseAssignmentScore = (value) => {
     const text = (value || '').trim();
