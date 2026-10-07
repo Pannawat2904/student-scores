@@ -768,6 +768,19 @@ async function syncSingleSubject(conf) {
   if (finalStudents.length > 0) {
     const { error: upsertError } = await supabase.from('scores').upsert(finalStudents, { onConflict: 'id, subject' });
     if (upsertError) throw upsertError;
+    
+    // Cleanup stale students
+    const validIds = Array.from(studentMap.keys());
+    const { data: existing } = await supabase.from('scores').select('id').eq('subject', conf.subject);
+    if (existing) {
+      const idsToDelete = existing.map(e => e.id).filter(id => !validIds.includes(id));
+      if (idsToDelete.length > 0) {
+        for (let i = 0; i < idsToDelete.length; i += 100) {
+          const chunk = idsToDelete.slice(i, i + 100);
+          await supabase.from('scores').delete().eq('subject', conf.subject).in('id', chunk);
+        }
+      }
+    }
     totalCount = finalStudents.length;
   }
 
