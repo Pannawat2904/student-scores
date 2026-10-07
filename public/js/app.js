@@ -335,7 +335,14 @@ function renderResult(id, data) {
       : item;
   });
   const renderItems = (items) => items.map(item => {
-    const name = item.displayName || item.name;
+    let name = item.displayName || item.name || '';
+    // Strip out top-level headers merged from Google Sheets like "คะแนนงาน (30 คะแนน) — "
+    name = name.replace(/^(?:คะแนน(?:งาน|เก็บ|สอบ|ปฏิบัติ|รวม)|สอบ(?:ระหว่างเรียน|ย่อย)|แบบทดสอบ).*?(?:—\s*)/i, '');
+    // Clean up trailing empty dashes like " — -"
+    name = name.replace(/(?:\s*—\s*[-_]*)+$/i, '').trim();
+    // Fallback if name becomes empty
+    if (!name) name = item.displayName || item.name;
+
     const missing = item.score === null || item.score === undefined || item.status === 'missing';
     const score = missing ? '—' : round1(item.score);
     const max = item.max === null || item.max === undefined ? '' : ` / ${round1(item.max)}`;
