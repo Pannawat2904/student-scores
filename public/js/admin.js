@@ -200,7 +200,14 @@ function renderTable() {
       <td style="text-align:center; font-family:var(--f-mono); font-size:13px; font-weight:600; color:var(--ink-dim);">${rollNo}</td>
       <td class="name-cell">
         <div class="n">${s.name}</div>
-        <div class="i">${s.id}</div>
+        <div class="i" style="display:flex; align-items:center; gap:6px; flex-wrap:wrap;">
+          <span>${s.id}</span>
+          ${s.attendance ? `
+            <span title="มา ${s.attendance.present || 0}, สาย ${s.attendance.late || 0}, ขาด ${s.attendance.absent || 0}, ลา ${s.attendance.leave || 0}" style="font-size:10px; padding:1px 6px; border-radius:4px; font-weight:600; background:${s.attendance.percent >= 80 ? 'rgba(16,185,129,0.15)' : 'rgba(239,68,68,0.15)'}; color:${s.attendance.percent >= 80 ? 'var(--mint)' : 'var(--rose)'};">
+              📅 ${(s.attendance.percent || 100).toFixed(0)}%
+            </span>
+          ` : ''}
+        </div>
       </td>
       <td class="num">${round1(s.work)}</td>
       <td class="num">${round1(s.mid)}</td>
