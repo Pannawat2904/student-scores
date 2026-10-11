@@ -23,12 +23,13 @@ async function fetchStudentScore(id, subject) {
     if (subject) url += `?subject=${encodeURIComponent(subject)}`;
     const res = await fetch(url);
     if (res.ok) {
-      return await res.json();
+      return { ok: true, data: await res.json() };
     }
-    return null;
+    const errData = await res.json().catch(() => ({}));
+    return { ok: false, status: res.status, ...errData };
   } catch (err) {
     console.error("Error fetching score:", err);
-    return null;
+    return { ok: false, error: err.message };
   }
 }
 
@@ -52,18 +53,33 @@ document.getElementById("back-btn").addEventListener("click", (e) => {
 
 async function loadSubjects() {
   try {
-    const res = await fetch('/api/config');
-    if (res.ok) {
-      const configs = await res.json();
-      if (configs.length > 0) {
-        subjectFilter.innerHTML = '<option value="" disabled selected>-- โปรดเลือกวิชา --</option>';
-        configs.forEach(c => {
-          const opt = document.createElement("option");
-          opt.value = c.subject;
-          opt.textContent = c.subject;
-          subjectFilter.appendChild(opt);
-        });
+    let subjects = [];
+    try {
+      const res = await fetch('/api/subjects');
+      if (res.ok) {
+        subjects = await res.json();
       }
+    } catch (_) {}
+
+    // Fallback to /api/config if /api/subjects returned nothing
+    if (!subjects || subjects.length === 0) {
+      const cfgRes = await fetch('/api/config');
+      if (cfgRes.ok) {
+        const configs = await cfgRes.json();
+        subjects = (configs || []).map(c => c.subject).filter(Boolean);
+      }
+    }
+
+    if (subjects && subjects.length > 0) {
+      subjectFilter.innerHTML = '<option value="" disabled selected>-- โปรดเลือกวิชา --</option>';
+      subjects.forEach(sub => {
+        const subName = typeof sub === 'string' ? sub : sub.subject;
+        if (!subName) return;
+        const opt = document.createElement("option");
+        opt.value = subName;
+        opt.textContent = subName;
+        subjectFilter.appendChild(opt);
+      });
     }
   } catch (err) {
     console.error("Error loading subjects:", err);
@@ -251,6 +267,9 @@ function renderResult(id, data) {
         sessionsGrid.innerHTML = '';
         att.sessions.forEach(sess => {
           if (!sess.date && !sess.week) return;
+          const sessionLabel = (sess.date || sess.week || '').trim();
+          if (!sessionLabel || sessionLabel === 'วันที่' || sessionLabel === 'เดือน' || sessionLabel === 'วันที่ เดือน' || /^(วันที่|เดือน|สัปดาห์|สัปดาห์ที่|วัน\/เดือน)/i.test(sessionLabel)) return;
+
           const div = document.createElement("div");
           div.style.cssText = "padding: 6px; border-radius: 8px; text-align: center; font-size: 11px; border: 1px solid var(--glass-border);";
           
@@ -279,7 +298,7 @@ function renderResult(id, data) {
 
           div.style.background = stBg;
           div.innerHTML = `
-            <div style="color: var(--ink-dim); font-size: 10px;">${sess.date || sess.week}</div>
+            <div style="color: var(--ink-dim); font-size: 10px;">${sessionLabel}</div>
             <div style="font-weight: 700; color: ${stColor}; margin-top: 2px;">${stText}</div>
           `;
           sessionsGrid.appendChild(div);
@@ -305,18 +324,22 @@ function renderResult(id, data) {
   const itemGrid = document.getElementById("item-grid");
   const assignments = Array.isArray(data.assignments) ? data.assignments : [];
   const isSummaryOrNote = (name) => {
-    if (/ข้อกา|ข้อเขียน|ปรนัย|อัตนัย/.test(name)) return false;
-    return /คะแนนเก็บ|คะแนนระหว่างเรียน|คะแนนรวม|รวมคะแนน|รวมทดสอบ|รวมงาน|รวมจิตพิสัย|รวมทั้งสิ้น|จิตพิสัย|ปลายภาค|เกรด|หมายเหตุ|^รวม(?:\s|$)|ซื่อสัตย์|รับผิดชอบ|ใฝ่รู้|เข้าเรียน|ปฏิบัติ|วินัย|คุณลักษณะ|สมรรถนะ|เวลาเรียน|มาเรียน|ขาด|ลา|สาย/.test(name || '');
+    if (/ข้อกา|ข้อเขียน|ปรนัย|อัตนัย|ทฤษฎี|ปฏิบัติ/.test(name)) return false;
+    return /คะแนนเก็บ|คะแนนระหว่างเรียน|คะแนนรวม|รวมคะแนน|รวมทดสอบ|รวมงาน|รวมจิตพิสัย|รวมทั้งสิ้น|จิตพิสัย|ปลายภาค|เกรด|หมายเหตุ|^รวม(?:\s|$)|ซื่อสัตย์|รับผิดชอบ|ใฝ่รู้|เข้าเรียน|วินัย|คุณลักษณะ|สมรรถนะ|เวลาเรียน|มาเรียน|ขาด|ลา|สาย|^วันที่$|^เดือน$|^วัน\/เดือน/.test(name || '');
   };
-  const isFinalPart = (item) => /ข้อกา|ข้อเขียน|ปรนัย|อัตนัย/i.test(item.name || '');
+  const isFinalPart = (item) => /ข้อกา|ข้อเขียน|ปรนัย|อัตนัย|ทฤษฎี|ปฏิบัติ/i.test(item.name || '') || item.type === 'final';
   const isTest = (item) => !isFinalPart(item) && (item.type === 'test' || /ทดสอบ|แบบสอบ|ข้อสอบ|สอบย่อย|quiz|หน่วย|บท|(?:^|—\s*)(?:ก่อน|หลัง)/i.test(item.name || ''));
   // Filter on the page too, so existing records immediately stop showing
   // summary columns even before the next data sync replaces them.
   const visibleItems = assignments.filter(item => !isSummaryOrNote(item.name));
-  const finalParts = visibleItems.filter(isFinalPart).map(item => ({
-    ...item,
-    displayName: (item.name || '').replace(/^(?:สอบ)?ปลายภาค\s*—\s*/i, '')
-  }));
+  const finalParts = visibleItems.filter(isFinalPart).map(item => {
+    const clean = (item.name || '').replace(/^(?:สอบ)?ปลายภาค\s*—\s*/i, '');
+    return {
+      ...item,
+      cleanName: clean,
+      displayName: clean
+    };
+  });
   const tests = visibleItems.filter(isTest);
   const works = visibleItems.filter(item => !isFinalPart(item) && !isTest(item));
   const escapeHTML = (value) => String(value ?? '').replace(/[&<>"']/g, char => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[char]);
@@ -417,6 +440,13 @@ function renderResult(id, data) {
   window.scrollTo({ top: 0, behavior: 'smooth' });
 }
 
+window.selectAndSearch = function(sub) {
+  if (subjectFilter) {
+    subjectFilter.value = sub;
+    form.dispatchEvent(new Event('submit'));
+  }
+};
+
 form.addEventListener("submit", async (e) => {
   e.preventDefault();
   const id = input.value.trim();
@@ -430,17 +460,28 @@ form.addEventListener("submit", async (e) => {
   }
 
   setLoading(true);
-  const data = await fetchStudentScore(id, subject);
+  const res = await fetchStudentScore(id, subject);
   setLoading(false);
 
-  if (!data) {
-    errorMsg.textContent = "ไม่พบข้อมูลในวิชานี้ กรุณาตรวจสอบรหัสอีกครั้ง";
+  if (!res.ok) {
+    if (res.enrolled_subjects && res.enrolled_subjects.length > 0) {
+      const studentNameText = res.student_name ? ` (${res.student_name})` : '';
+      const buttonsHtml = res.enrolled_subjects.map(s => 
+        `<button type="button" class="btn btn-outline" style="display:block; width:100%; margin:8px 0; padding:10px 14px; background:rgba(217,119,6,0.15); color:var(--gold-soft); border:1px solid var(--gold); border-radius:8px; font-weight:600; cursor:pointer; font-size:13px; text-align:center;" onclick="selectAndSearch('${s.replace(/'/g, "\\'")}')">👉 ดูคะแนนวิชา: ${s}</button>`
+      ).join('');
+
+      errorMsg.innerHTML = `รหัส <strong>${id}</strong>${studentNameText} ไม่ได้ลงทะเบียนในวิชาที่เลือกนี้<br><span style="display:block; margin-top:8px; font-size:13px;">พบข้อมูลในวิชาที่คุณลงทะเบียนไว้:</span>${buttonsHtml}`;
+    } else {
+      errorMsg.textContent = "ไม่พบข้อมูลในระบบ กรุณาตรวจสอบรหัสประจำตัวอีกครั้ง";
+    }
     errorMsg.classList.add("show");
     return;
   }
 
+  const data = res.data;
   // Save session
-  localStorage.setItem('student_session', JSON.stringify({ id, subject, timestamp: Date.now() }));
+  localStorage.setItem('student_session', JSON.stringify({ id, subject: data.subject || subject, timestamp: Date.now() }));
 
   renderResult(id, data);
 });
+

@@ -157,7 +157,9 @@ function populateSubjectFilter() {
     opt.textContent = sub;
     subjectFilter.appendChild(opt);
   });
-  if (subjects.includes(currentVal)) {
+  if (currentVal === "") {
+    subjectFilter.value = "";
+  } else if (subjects.includes(currentVal)) {
     subjectFilter.value = currentVal;
   } else if (subjects.length > 0) {
     subjectFilter.value = subjects[0];
@@ -189,6 +191,17 @@ function renderTable() {
   tbody.innerHTML = "";
 
   if (filtered.length === 0) {
+    if (query && selectedSubject) {
+      const matchInOther = students.filter(s => s.name.toLowerCase().includes(query) || s.id.includes(query));
+      if (matchInOther.length > 0) {
+        const foundSubs = [...new Set(matchInOther.map(s => s.subject))];
+        const buttons = foundSubs.map(sub => 
+          `<button type="button" class="btn" style="margin:6px 4px; padding:6px 12px; font-size:12px; font-weight:600; background:var(--gold); color:var(--night); border:none; border-radius:6px; cursor:pointer;" onclick="document.getElementById('subject-filter').value='${sub.replace(/'/g, "\\'")}'; renderTable();">👉 สลับไปดูวิชา: ${sub}</button>`
+        ).join(' ');
+        tbody.innerHTML = `<tr class="empty-row"><td colspan="8" style="padding:24px; text-align:center;">ไม่พบนักเรียนรหัส/ชื่อนี้ในวิชาปัจจุบัน<br><div style="margin-top:8px; font-size:13px; color:var(--ink-dim);">แต่พบในวิชาอื่น:</div>${buttons}</td></tr>`;
+        return;
+      }
+    }
     tbody.innerHTML = `<tr class="empty-row"><td colspan="8">ไม่พบนักเรียนที่ค้นหา</td></tr>`;
   }
 
@@ -331,7 +344,9 @@ function showDetailsModal(id, subject) {
     const tests = [];
     const works = [];
     student.assignments.forEach(a => {
-      if (a.name.includes("ทดสอบ") || a.name.includes("สอบ")) {
+      const name = (a.name || '').trim();
+      if (/^(วันที่|เดือน|วัน\/เดือน|วัน\/เดือน\/ปี)$/i.test(name)) return;
+      if (name.includes("ทดสอบ") || name.includes("สอบ")) {
         tests.push(a);
       } else {
         works.push(a);

@@ -171,12 +171,25 @@ app.get('/api/scores/:id', async (req, res) => {
 
   let query = supabase.from('scores').select('*').eq('id', req.params.id);
   if (subject) {
-    query = query.eq('subject', subject);
+    query = query.eq('subject', subject.trim());
   }
   
-  const { data, error } = await query;
+  let { data, error } = await query;
   if (error) return res.status(500).json({ error: error.message });
   
+  // If no match found and a subject filter was provided, try fuzzy/partial match on subject name
+  if ((!data || data.length === 0) && subject) {
+    const cleanSub = subject.trim();
+    const { data: fuzzyData } = await supabase
+      .from('scores')
+      .select('*')
+      .eq('id', req.params.id)
+      .ilike('subject', `%${cleanSub}%`);
+    if (fuzzyData && fuzzyData.length > 0) {
+      data = fuzzyData;
+    }
+  }
+
   if (data && data.length > 0) {
     const student = { ...data[0] };
     // Log access to login_history
@@ -234,6 +247,25 @@ app.get('/api/scores/:id', async (req, res) => {
 
     res.json(student); // Return the first match if multiple
   } else {
+    // Check if the student ID exists in any other subjects to provide helpful guidance
+    try {
+      const { data: anySubjects } = await supabase
+        .from('scores')
+        .select('subject, name')
+        .eq('id', req.params.id);
+
+      if (anySubjects && anySubjects.length > 0) {
+        const studentName = anySubjects[0].name;
+        const enrolled = [...new Set(anySubjects.map(r => r.subject))];
+        return res.status(404).json({
+          error: 'Student not in this subject',
+          student_id: req.params.id,
+          student_name: studentName,
+          enrolled_subjects: enrolled
+        });
+      }
+    } catch (_) {}
+
     res.status(404).json({ error: 'Student not found' });
   }
 });
@@ -285,6 +317,22 @@ app.get('/api/config', async (req, res) => {
   const { data, error } = await supabase.from('configs').select('*');
   if (error) return res.status(500).json({ error: error.message });
   res.json(data);
+});
+
+// GET /api/subjects - Get all distinct subjects (from both configs and scores)
+app.get('/api/subjects', async (req, res) => {
+  try {
+    const [cfgRes, scoreRes] = await Promise.all([
+      supabase.from('configs').select('subject'),
+      supabase.from('scores').select('subject')
+    ]);
+    const cfgSubs = (cfgRes.data || []).map(c => c.subject).filter(Boolean);
+    const scoreSubs = (scoreRes.data || []).map(s => s.subject).filter(Boolean);
+    const allSubs = [...new Set([...cfgSubs, ...scoreSubs])];
+    res.json(allSubs);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
 });
 
 // POST /api/config - Save sync configurations
@@ -414,103 +462,109 @@ function processCSVContent(content, subject) {
     }
   }
 
-  const lines = cleanContent.split('\n').map(l => l.trim()).filter(l => l);
+  const lines = cleanContent.split('\n').map(l => l.trim()).filter(Boolean);
   const records = lines.map(parseCSVLine);
 
   let dataStartIndex = -1;
-  let subHeaderIndex = -1;
-
   for (let i = 0; i < records.length; i++) {
     const row = records[i];
     if (row[1] && row[1].match(/^\d{11}$/)) {
-      if (dataStartIndex === -1) {
-        dataStartIndex = i;
-        break;
-      }
+      dataStartIndex = i;
+      break;
     }
-  }
-
-  if (dataStartIndex > 0) {
-    subHeaderIndex = dataStartIndex - 1;
   }
 
   if (dataStartIndex === -1) {
     throw new Error('ไม่พบรูปแบบตารางคะแนนที่รองรับในไฟล์ CSV นี้');
   }
 
-  // Google Sheets exports often have more than one header row.  Combine the
-  // labels so that a grouped heading (for example "งาน") retains the actual
-  // assignment name from the row below it.
-  const columnHeaders = [];
-  let currentTestUnit = '';
-  for (let c = 0; c < (records[subHeaderIndex] || []).length; c++) {
-    const labels = [];
-    for (let r = 0; r <= subHeaderIndex; r++) {
-      const label = (records[r][c] || '').trim();
-      if (label && !labels.includes(label)) {
-        labels.push(label);
-        // In Sheets exports, merged unit headings appear only in their first
-        // column. Remember that heading so the following "หลัง ... ข้อ"
-        // column keeps its unit number too.
-        if (/(?:แบบ)?ทดสอบ.*หน่วย|หน่วย\s*(?:ที่\s*)?\d+/i.test(label)) currentTestUnit = label;
-      }
-    }
-    const itemLabel = labels.join(' — ');
-    if (currentTestUnit && /^(ก่อน|หลัง)\s*\d+\s*(?:ข้อ|คะแนน)?/i.test(itemLabel) && !itemLabel.includes(currentTestUnit)) {
-      labels.unshift(currentTestUnit);
-    }
-    columnHeaders[c] = labels.join(' — ');
-  }
+  const subHeaderIndex = dataStartIndex - 1;
 
+  // 1. Identify summary columns accurately with priority matching
   let workCol = -1, midCol = -1, jitCol = -1, finalCol = -1, totalCol = -1;
-  for (let r = 0; r <= subHeaderIndex; r++) {
-    for (let c = 5; c < records[r].length; c++) {
-      const h = (records[r][c] || '').trim();
-      if (h.includes('คะแนนเก็บ') || h.includes('รวมงาน')) workCol = c;
-      if (h.includes('ระหว่างเรียน') || h.includes('รวมทดสอบ')) midCol = c;
-      if (h.includes('จิตพิสัย') && jitCol === -1) jitCol = c;
-      if (h.includes('ปลายภาค') || h.includes('รวมปลายภาค')) finalCol = c;
-      if (h.includes('คะแนนรวม') || h.includes('รวมทั้งสิ้น')) totalCol = c;
+
+  for (let c = 4; c < (records[subHeaderIndex] || []).length; c++) {
+    for (let r = 1; r <= subHeaderIndex; r++) {
+      const val = (records[r][c] || '').trim();
+      if ((val === 'รวมงาน' || val === 'คะแนนเก็บ' || val.includes('รวมคะแนนงาน')) && workCol === -1) workCol = c;
+      if ((val === 'รวมทดสอบ' || val === 'ระหว่างเรียน' || val === 'รวมระหว่างเรียน') && midCol === -1) midCol = c;
+      if ((val === 'รวมจิตพิสัย' || val === 'จิตพิสัย') && !val.includes('ด้าน') && !/^\d+\./.test(val) && jitCol === -1) jitCol = c;
+      if ((val === 'รวมปลายภาค' || val === 'ปลายภาค') && !val.includes('ทฤษฎี') && !val.includes('ปฏิบัติ') && finalCol === -1) finalCol = c;
+      if ((val === 'รวมทั้งสิ้น' || val === 'คะแนนรวม' || val === 'รวมคะแนน') && totalCol === -1) totalCol = c;
     }
   }
 
-  const summaryColumns = new Set([workCol, midCol, jitCol, finalCol, totalCol]);
-  // These are summary/administrative fields, not work that a student needs to
-  // submit.  Some exports repeat a label in a different header row, so filter
-  // by name as well as by its detected summary column.
-  const isSummaryOrNote = (name) => {
-    if (/ข้อกา|ข้อเขียน|ปรนัย|อัตนัย/.test(name)) return false;
-    // Exclude summary columns, notes, and affective domain (จิตพิสัย) / behavioral criteria
-    return /คะแนนเก็บ|คะแนนระหว่างเรียน|คะแนนรวม|รวมคะแนน|รวมทดสอบ|รวมงาน|รวมจิตพิสัย|รวมทั้งสิ้น|จิตพิสัย|ปลายภาค|เกรด|หมายเหตุ|^รวม(?:\s|$)|ซื่อสัตย์|รับผิดชอบ|ใฝ่รู้|เข้าเรียน|ปฏิบัติ|วินัย|คุณลักษณะ|สมรรถนะ|เวลาเรียน|มาเรียน|ขาด|ลา|สาย/.test(name);
-  };
-  const assignmentColumns = columnHeaders
-    .map((name, index) => ({ name, index }))
-    // Columns 0–3 contain row number and student details in the supported export.
-    .filter(({ name, index }) => index >= 4 && name && !summaryColumns.has(index) && !isSummaryOrNote(name))
-    .filter(({ name }) => !/^(ลำดับ|รหัส|ชื่อ|นามสกุล|ชื่อเล่น|ห้อง|ชั้น|กลุ่ม|เลขที่)(\s|$)/.test(name));
+  const summaryColumns = new Set([workCol, midCol, jitCol, finalCol, totalCol].filter(x => x !== -1));
+
+  // 2. Build assignment columns definitions
+  let currentCategory = '';
+  let currentUnit = '';
+  const assignmentColumns = [];
+
+  for (let c = 4; c < (records[subHeaderIndex] || []).length; c++) {
+    if (summaryColumns.has(c)) continue;
+
+    const r1 = records[1] && records[1][c] ? records[1][c].trim() : '';
+    if (r1) currentCategory = r1;
+
+    const r2 = records[2] && records[2][c] ? records[2][c].trim() : '';
+    if (r2 && /หน่วย\s*(?:ที่\s*)?\d+/i.test(r2)) currentUnit = r2;
+
+    const r3 = records[3] && records[3][c] ? records[3][c].trim() : '';
+
+    if (/^(ลำดับ|รหัส|ชื่อ|นามสกุล|ชื่อเล่น|ห้อง|ชั้น|กลุ่ม|เลขที่|วันที่|เดือน|วัน\/เดือน)(\s|$)/i.test(r2)) continue;
+    if (/^(วันที่|เดือน|วัน\/เดือน|วัน\/เดือน\/ปี)$/i.test((r2 || '').trim()) || /^(วันที่|เดือน|วัน\/เดือน|วัน\/เดือน\/ปี)$/i.test((r3 || '').trim())) continue;
+    if (/วินัย|ซื่อสัตย์|รับผิดชอบ|ใฝ่รู้|เข้าเรียน/.test(r2)) continue;
+    if (r2.includes('หมายเหตุ') || r2.includes('ลำดับ')) continue;
+
+    let colName = '';
+    let max = null;
+    let type = 'work';
+
+    if (/ก่อน|หลัง/i.test(r3)) {
+      type = 'test';
+      colName = (currentUnit ? currentUnit + ' — ' : '') + r3;
+      const m = r3.match(/\d+(?:\.\d+)?/);
+      if (m) max = parseFloat(m[0]);
+    } else if (/ทฤษฎี|ปฏิบัติ/i.test(r2)) {
+      type = 'final';
+      colName = 'สอบปลายภาค — ' + r2;
+      const m = r3.match(/\d+(?:\.\d+)?/);
+      if (m) max = parseFloat(m[0]);
+    } else if (r2.includes('งานที่') || currentCategory.includes('งาน')) {
+      type = 'work';
+      colName = r2 || ('งานคอลัมน์ ' + c);
+      const m = r3.match(/\d+(?:\.\d+)?/);
+      if (m && r3 !== '-') max = parseFloat(m[0]);
+    } else if (r2.includes('คะแนนพิเศษ')) {
+      type = 'work';
+      colName = 'คะแนนพิเศษ';
+    } else {
+      colName = [r2, r3].filter(x => x && x !== '-').join(' ');
+      const m = (r3 || r2).match(/(?:เต็ม|คะแนน|ข้อ)\s*(\d+(?:\.\d+)?)/);
+      if (m) max = parseFloat(m[1]);
+    }
+
+    if (colName) {
+      assignmentColumns.push({ index: c, name: colName, max, type });
+    }
+  }
 
   const parseAssignmentScore = (value) => {
     const text = (value || '').trim();
-    if (text === '') return null;
+    if (text === '' || text === '-') return null;
     const score = Number.parseFloat(text.replace(/,/g, ''));
     return Number.isFinite(score) ? score : null;
   };
-
-  const getMaxScore = (name) => {
-    const match = name.match(/(?:เต็ม|คะแนน|ข้อ)\s*(\d+(?:\.\d+)?)/) || name.match(/\(\s*(\d+(?:\.\d+)?)\s*\)/);
-    return match ? Number.parseFloat(match[1]) : null;
-  };
-
-  const isTest = (name) => /ทดสอบ|แบบสอบ|ข้อสอบ|สอบย่อย|quiz|(?:^|—\s*)(?:ก่อน|หลัง)\s*\d+\s*(?:ข้อ|คะแนน)?/i.test(name);
 
   const parsedStudents = [];
   for (let i = dataStartIndex; i < records.length; i++) {
     const row = records[i];
     if (!row[1] || !row[1].match(/^\d{11}$/)) continue;
-    
+
     const id = row[1].trim();
     const name = row[2].trim();
-    
+
     let work = workCol !== -1 ? (parseFloat((row[workCol] || '').trim()) || 0) : 0;
     let mid = midCol !== -1 ? (parseFloat((row[midCol] || '').trim()) || 0) : 0;
     let jit = jitCol !== -1 ? (parseFloat((row[jitCol] || '').trim()) || 0) : 0;
@@ -518,17 +572,16 @@ function processCSVContent(content, subject) {
     let total = totalCol !== -1 ? (parseFloat((row[totalCol] || '').trim()) || 0) : 0;
 
     if (total === 0) {
-       // Fallback total calculation if no specific total column is found
-       total = work + mid + jit + final; 
+      total = work + mid + jit + final;
     }
 
-    const assignments = assignmentColumns.map(({ name: assignmentName, index }) => {
+    const assignments = assignmentColumns.map(({ name: assignmentName, index, max, type }) => {
       const score = parseAssignmentScore(row[index]);
       return {
         name: assignmentName,
         score,
-        max: getMaxScore(assignmentName),
-        type: isTest(assignmentName) ? 'test' : 'work',
+        max,
+        type,
         status: score === null ? 'missing' : 'submitted'
       };
     });
@@ -536,6 +589,7 @@ function processCSVContent(content, subject) {
     const nowIso = new Date().toISOString();
     parsedStudents.push({ id, name, subject, work, mid, jit, final, total, assignments, updated_at: nowIso });
   }
+
   return parsedStudents;
 }
 
@@ -571,6 +625,12 @@ function processAttendanceCSV(content, subject) {
 
   if (dataStartIndex === -1) return [];
 
+  const isLabelHeader = (val) => {
+    if (!val) return false;
+    const clean = String(val).trim().replace(/\s+/g, '');
+    return /^(วันที่|เดือน|สัปดาห์|สัปดาห์ที่|วัน\/เดือน|วัน\/เดือน\/ปี|วัน|ลำดับ|เลขที่|รหัส|ชื่อ|นามสกุล|ชื่อเล่น)$/i.test(clean);
+  };
+
   // Detect summary columns from top rows
   let comeCol = -1, lateCol = -1, absentCol = -1, sickLeaveCol = -1, errandLeaveCol = -1, percentCol = -1;
   for (let r = 0; r < Math.min(4, records.length); r++) {
@@ -596,11 +656,25 @@ function processAttendanceCSV(content, subject) {
   const startCol = 4;
   const endCol = comeCol > -1 ? comeCol : 23;
   for (let c = startCol; c < endCol; c++) {
-    const weekVal = weekRowIndex > -1 ? records[weekRowIndex][c]?.trim() : '';
-    const monthVal = monthRowIndex > -1 ? records[monthRowIndex][c]?.trim() : '';
-    const dateVal = dateRowIndex > -1 ? records[dateRowIndex][c]?.trim() : '';
+    const weekVal = weekRowIndex > -1 ? (records[weekRowIndex][c] || '').trim() : '';
+    const monthVal = monthRowIndex > -1 ? (records[monthRowIndex][c] || '').trim() : '';
+    const dateVal = dateRowIndex > -1 ? (records[dateRowIndex][c] || '').trim() : '';
+
+    // Ignore columns whose header label literally says วันที่ or เดือน or สัปดาห์
+    if (isLabelHeader(dateVal) || isLabelHeader(monthVal)) {
+      continue;
+    }
+    if (isLabelHeader(weekVal) && !dateVal && !monthVal) {
+      continue;
+    }
+
     if (dateVal || weekVal) {
-      sessionCols.push({ col: c, week: weekVal, month: monthVal, date: dateVal });
+      sessionCols.push({
+        col: c,
+        week: isLabelHeader(weekVal) ? '' : weekVal,
+        month: isLabelHeader(monthVal) ? '' : monthVal,
+        date: isLabelHeader(dateVal) ? '' : dateVal
+      });
     }
   }
 
@@ -619,12 +693,20 @@ function processAttendanceCSV(content, subject) {
 
     const sessions = sessionCols.map(s => {
       const statusRaw = (row[s.col] || '').trim();
+      let label = '';
+      if (s.date && s.month) {
+        label = `${s.date} ${s.month}`.trim();
+      } else if (s.date) {
+        label = s.date;
+      } else if (s.week) {
+        label = s.week;
+      }
       return {
         week: s.week,
-        date: s.date ? `${s.date} ${s.month}`.trim() : s.week,
+        date: label,
         val: statusRaw
       };
-    });
+    }).filter(s => s.date && !isLabelHeader(s.date) && s.date !== 'วันที่ เดือน');
 
     students.push({
       id,
@@ -636,7 +718,7 @@ function processAttendanceCSV(content, subject) {
         absent,
         leave,
         percent,
-        total_sessions: sessionCols.length,
+        total_sessions: sessions.length,
         sessions
       }
     });
@@ -669,7 +751,7 @@ app.post('/api/scores/upload', cookieAuth, upload.single('file'), async (req, re
 // Auto-Sync Logic & Helpers
 // ==========================================
 const AUTO_SYNC_INTERVAL_MINUTES = parseInt(process.env.AUTO_SYNC_INTERVAL_MINUTES, 10) || 0;
-const AUTO_SYNC_INTERVAL_MS = AUTO_SYNC_INTERVAL_MINUTES * 60 * 1000;
+const AUTO_SYNC_INTERVAL_MS = (parseInt(process.env.AUTO_SYNC_INTERVAL_SECONDS, 10) || (AUTO_SYNC_INTERVAL_MINUTES > 0 ? AUTO_SYNC_INTERVAL_MINUTES * 60 : 30)) * 1000;
 
 const lastSyncBySubject = new Map(); // subject -> timestamp (ms)
 let lastGlobalSyncTime = 0;
@@ -920,13 +1002,15 @@ app.post('/api/scores/sync', cookieAuth, async (req, res) => {
 });
 
 // Background periodic sync for continuous Node servers (e.g. local dev, VPS, etc.)
-setInterval(async () => {
-  try {
-    await checkAndAutoSync(null);
-  } catch (err) {
-    console.warn('[Auto-Sync] Background interval sync warning:', err.message);
-  }
-}, AUTO_SYNC_INTERVAL_MS);
+if (AUTO_SYNC_INTERVAL_MS > 0) {
+  setInterval(async () => {
+    try {
+      await checkAndAutoSync(null);
+    } catch (err) {
+      console.warn('[Auto-Sync] Background interval sync warning:', err.message);
+    }
+  }, Math.max(AUTO_SYNC_INTERVAL_MS, 60000));
+}
 
 app.listen(PORT, () => {
   console.log(`Server is running on http://localhost:${PORT}`);
