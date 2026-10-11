@@ -6,32 +6,53 @@ const supabase = createClient(
   'sb_publishable_2j3oXeUH5s_em-r2JuMj0g_I3tGVkmJ'
 );
 
-const scoreUrls = {
-  "การเขียนโปรแกรมเชิงวัตถุเบื้องต้น ธดท.2/2": "https://docs.google.com/spreadsheets/d/1gDOukMTR1Vjy8BX3Hbb-7otRPvkAS8DOg12HXhoX5Q0/edit?gid=521597264#gid=521597264",
-  "วิทยาการก้าวหน้าในอุตสาหกรรมดิจิทัล IT2/1": "https://docs.google.com/spreadsheets/d/1e5Uv__cww36oQOPbDLSqps8QRT5sd3XGwj6yGrkqpLM/edit?gid=521597264#gid=521597264",
-  "การพัฒนาเว็บแอปพลิเคชัน IT2/1": "https://docs.google.com/spreadsheets/d/1xZQB_09jU72nQpsNl6zY4KneM8BrPqKD9rS8c7r3gFQ/edit?gid=521597264#gid=521597264"
-};
+const attDocId = "16-T6awoN63yHhnbQm0nbqpWvXd-ASmutjA-Ov_K2EZM";
+
+const subjectConfigs = [
+  {
+    subject: "การเขียนโปรแกรมเชิงวัตถุเบื้องต้น ธดท.2/2",
+    url: "https://docs.google.com/spreadsheets/d/1gDOukMTR1Vjy8BX3Hbb-7otRPvkAS8DOg12HXhoX5Q0/edit?gid=521597264#gid=521597264",
+    attendance_url: `https://docs.google.com/spreadsheets/d/${attDocId}/edit?gid=1212047077#gid=1212047077`
+  },
+  {
+    subject: "วิทยาการก้าวหน้าในอุตสาหกรรมดิจิทัล IT2/1",
+    url: "https://docs.google.com/spreadsheets/d/1e5Uv__cww36oQOPbDLSqps8QRT5sd3XGwj6yGrkqpLM/edit?gid=521597264#gid=521597264",
+    attendance_url: `https://docs.google.com/spreadsheets/d/${attDocId}/edit?gid=3001#gid=3001`
+  },
+  {
+    subject: "การพัฒนาเว็บแอปพลิเคชัน IT2/1",
+    url: "https://docs.google.com/spreadsheets/d/1xZQB_09jU72nQpsNl6zY4KneM8BrPqKD9rS8c7r3gFQ/edit?gid=521597264#gid=521597264",
+    attendance_url: `https://docs.google.com/spreadsheets/d/${attDocId}/edit?gid=2001#gid=2001`
+  }
+];
 
 async function updateConfigs() {
-  for (const [subject, url] of Object.entries(scoreUrls)) {
-    const { data: existing } = await supabase.from('configs').select('*').eq('subject', subject).maybeSingle();
+  for (const cfg of subjectConfigs) {
+    const { data: existing } = await supabase.from('configs').select('*').eq('subject', cfg.subject).maybeSingle();
+    const updatePayload = {
+      url: cfg.url,
+      jit_config: {
+        ...(existing?.jit_config || {}),
+        attendance_url: cfg.attendance_url,
+        show_to_students: false
+      }
+    };
     if (existing) {
       const { error: updateErr } = await supabase
         .from('configs')
-        .update({ url })
-        .eq('subject', subject);
-      if (updateErr) console.error(`Error updating config for ${subject}:`, updateErr);
-      else console.log(`Updated config for ${subject}`);
+        .update(updatePayload)
+        .eq('subject', cfg.subject);
+      if (updateErr) console.error(`Error updating config for ${cfg.subject}:`, updateErr);
+      else console.log(`Updated config for ${cfg.subject}`);
     } else {
       const { error: insertErr } = await supabase
         .from('configs')
         .insert({
-          subject,
-          url,
-          jit_config: { show_to_students: false, attendance_url: '' }
+          subject: cfg.subject,
+          ...updatePayload
         });
-      if (insertErr) console.error(`Error inserting config for ${subject}:`, insertErr);
-      else console.log(`Inserted config for ${subject}`);
+      if (insertErr) console.error(`Error inserting config for ${cfg.subject}:`, insertErr);
+      else console.log(`Inserted config for ${cfg.subject}`);
     }
   }
 }
