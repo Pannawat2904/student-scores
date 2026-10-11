@@ -7,9 +7,9 @@ const supabase = createClient(
 );
 
 const scoreUrls = {
-  "วิทยาการก้าวหน้าในอุตสาหกรรมดิจิทัล IT2/1": "https://docs.google.com/spreadsheets/d/1gDOukMTR1Vjy8BX3Hbb-7otRPvkAS8DOg12HXhoX5Q0/edit?gid=521597264#gid=521597264",
-  "การพัฒนาเว็บแอปพลิเคชัน IT2/1": "https://docs.google.com/spreadsheets/d/1e5Uv__cww36oQOPbDLSqps8QRT5sd3XGwj6yGrkqpLM/edit?gid=521597264#gid=521597264",
-  "การเขียนโปรแกรมเชิงวัตถุเบื้องต้น ธดท.2/2": "https://docs.google.com/spreadsheets/d/1xZQB_09jU72nQpsNl6zY4KneM8BrPqKD9rS8c7r3gFQ/edit?gid=521597264#gid=521597264"
+  "การเขียนโปรแกรมเชิงวัตถุเบื้องต้น ธดท.2/2": "https://docs.google.com/spreadsheets/d/1gDOukMTR1Vjy8BX3Hbb-7otRPvkAS8DOg12HXhoX5Q0/edit?gid=521597264#gid=521597264",
+  "วิทยาการก้าวหน้าในอุตสาหกรรมดิจิทัล IT2/1": "https://docs.google.com/spreadsheets/d/1e5Uv__cww36oQOPbDLSqps8QRT5sd3XGwj6yGrkqpLM/edit?gid=521597264#gid=521597264",
+  "การพัฒนาเว็บแอปพลิเคชัน IT2/1": "https://docs.google.com/spreadsheets/d/1xZQB_09jU72nQpsNl6zY4KneM8BrPqKD9rS8c7r3gFQ/edit?gid=521597264#gid=521597264"
 };
 
 async function updateConfigs() {
